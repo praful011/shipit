@@ -10,7 +10,10 @@
   "plugins": [
     {
       "name": "shipit",
-      "source": ".",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/praful011/shipit.git"
+      },
       "description": "Unified development plugin: auto-loop execution, TDD enforcement, persistent state, and smart task decomposition. One command to ship features.",
       "version": "1.0.0"
     }
