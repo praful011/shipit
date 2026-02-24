@@ -3,7 +3,7 @@
   "description": "Unified development plugin: auto-loop execution, TDD enforcement, persistent state, and smart task decomposition. One command to ship features.",
   "version": "1.0.0",
   "author": {
-    "name": "praful"
+    "name": "tops"
   },
   "license": "MIT",
   "keywords": ["shipping", "tdd", "auto-loop", "task-decomposition", "state-management", "autonomous"]
