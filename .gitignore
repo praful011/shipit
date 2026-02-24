@@ -1,0 +1,16 @@
+# ShipIt session state (per-project, not source code)
+.shipit/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

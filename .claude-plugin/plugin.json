@@ -3,8 +3,10 @@
   "description": "Unified development plugin: auto-loop execution, TDD enforcement, persistent state, and smart task decomposition. One command to ship features.",
   "version": "1.0.0",
   "author": {
-    "name": "tops"
+    "name": "Prafulk"
   },
+  "homepage": "https://github.com/praful011/shipit",
+  "repository": "https://github.com/praful011/shipit",
   "license": "MIT",
   "keywords": ["shipping", "tdd", "auto-loop", "task-decomposition", "state-management", "autonomous"]
 }
