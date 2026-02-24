@@ -39,66 +39,56 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 
 ## Installation
 
-### Option 1: From a Marketplace (Recommended)
+### Quick Install (2 commands)
 
-If ShipIt is available in a marketplace you've added:
-
-```
-/plugin install shipit@<marketplace-name>
-```
-
-### Option 2: Local Marketplace
-
-Create a local marketplace to host ShipIt and any other custom plugins:
-
-**1. Create the marketplace directory:**
-
-```bash
-mkdir -p ~/my-plugins/.claude-plugin
-```
-
-**2. Create `~/my-plugins/.claude-plugin/marketplace.json`:**
-
-```json
-{
-  "name": "my-plugins",
-  "owner": { "name": "Your Name" },
-  "plugins": [
-    {
-      "name": "shipit",
-      "source": "./plugins/shipit",
-      "description": "One command to ship features.",
-      "version": "1.0.0"
-    }
-  ]
-}
-```
-
-**3. Clone or symlink ShipIt into the marketplace:**
-
-```bash
-mkdir -p ~/my-plugins/plugins
-git clone https://github.com/praful011/shipit.git ~/my-plugins/plugins/shipit
-```
-
-**4. Add the marketplace and install:**
+Run these inside Claude Code:
 
 ```
-/plugin marketplace add ~/my-plugins
-/plugin install shipit@my-plugins
+/plugin marketplace add praful011/shipit
 ```
 
-**5. Restart Claude Code.**
+```
+/plugin install shipit@shipit-marketplace
+```
 
-### Option 3: Direct Plugin Directory (Development)
+Restart Claude Code. Done! You now have `/shipit:go` and all other commands.
 
-Load ShipIt directly without installing — useful for development:
+### Alternative: Direct from Git (Development)
+
+Load ShipIt without installing — great for development or trying it out:
 
 ```bash
 claude --plugin-dir /path/to/shipit
 ```
 
-Changes to the plugin files take effect on next restart.
+Or clone and load:
+
+```bash
+git clone https://github.com/praful011/shipit.git
+claude --plugin-dir ./shipit
+```
+
+### Alternative: Add to Your Own Marketplace
+
+If you maintain a custom marketplace, add ShipIt as a plugin source:
+
+```json
+{
+  "name": "shipit",
+  "source": {
+    "source": "url",
+    "url": "https://github.com/praful011/shipit.git"
+  },
+  "description": "One command to ship features.",
+  "version": "1.0.0"
+}
+```
+
+Then install:
+
+```
+/plugin install shipit@your-marketplace
+```
 
 ---
 
