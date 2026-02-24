@@ -555,36 +555,9 @@ shipit/
 
 ---
 
-## Contributing
+## Author
 
-Contributions are welcome! Here's how:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Make your changes
-4. Run the tests: `node bin/shipit-tools.test.cjs`
-5. Commit with conventional commits: `feat: add my feature`
-6. Open a pull request
-
-### Development
-
-Load ShipIt in development mode:
-
-```bash
-claude --plugin-dir /path/to/your/shipit-fork
-```
-
-Changes take effect on next Claude Code restart.
-
----
-
-## Acknowledgements
-
-ShipIt stands on the shoulders of these excellent projects:
-
-- **[Superpowers](https://github.com/obra/superpowers)** by Jesse Vincent — TDD enforcement, debugging patterns, and skill architecture
-- **[GSD (Get Shit Done)](https://github.com/get-shit-done)** — Persistent state management, task decomposition, and multi-agent coordination
-- **[Ralph Loop](https://github.com/anthropics/claude-plugins-official)** by Anthropic — Auto-loop technique using Stop hooks
+**Praful** — [@praful011](https://github.com/praful011)
 
 ---
 
