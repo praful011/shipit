@@ -5,7 +5,7 @@ description: Core ShipIt plugin awareness - injected at session start
 
 # ShipIt
 
-ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, and smart task decomposition into 8 commands.
+ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, and smart task decomposition into 10 commands.
 
 ## Commands
 
@@ -18,6 +18,8 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 | `/shipit:status` | Show current progress — tasks, completion %, blockers |
 | `/shipit:debug <issue>` | Systematic debugging with persistent state |
 | `/shipit:done` | Verify + finish — runs tests, reviews diff, offers commit/PR |
+| `/shipit:discuss <topic>` | Discussion mode — chat about project, no code changes |
+| `/shipit:update` | Update ShipIt to latest version from remote |
 | `/shipit:help` | Show usage guide |
 
 ## How It Works
@@ -39,6 +41,7 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 - `.shipit/PROJECT.md` — What we're building
 - `.shipit/STATE.md` — Current position and progress
 - `.shipit/PLAN.md` — Active plan with tasks
+- `.shipit/HANDOFF.md` — Cumulative context from completed tasks
 - `.shipit/config.json` — Preferences
 - `.shipit/loop.md` — Loop state (auto-managed)
 

@@ -42,6 +42,16 @@ Examples:
 ### /shipit:done
 Verify work and finish (commit, PR, or just report).
 
+### /shipit:discuss <topic>
+Discussion mode — chat about your project without code changes.
+Examples:
+  /shipit:discuss should we use Redis or Memcached for caching?
+  /shipit:discuss walk me through the auth flow
+  /shipit:discuss what's the best way to handle file uploads?
+
+### /shipit:update
+Update ShipIt to the latest version from remote.
+
 ### /shipit:help
 This help text.
 
@@ -58,6 +68,7 @@ This help text.
 - PROJECT.md — What the project is about
 - STATE.md — Current progress and position
 - PLAN.md — Active plan with tasks
+- HANDOFF.md — Cumulative context from completed tasks
 - config.json — Preferences (TDD, loop, parallelism)
 - loop.md — Auto-loop state (managed automatically)
 - debug/DEBUG.md — Debugging session state

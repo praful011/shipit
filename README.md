@@ -254,6 +254,36 @@ Runs the verifier agent, then asks:
 
 ---
 
+### `/shipit:discuss <topic>`
+
+Discussion mode — chat about your project, architecture, or ideas **without making any code changes.** ShipIt will read your codebase to give informed answers but won't modify anything.
+
+```
+/shipit:discuss should we use Redis or Memcached for caching?
+/shipit:discuss walk me through the auth flow
+/shipit:discuss what's the best way to handle file uploads?
+```
+
+Great for:
+- Exploring approaches before committing to implementation
+- Understanding existing code
+- Comparing libraries, patterns, or architectures
+- Planning ahead without writing a formal plan
+
+---
+
+### `/shipit:update`
+
+Update ShipIt to the latest version from the remote repository.
+
+```
+/shipit:update
+```
+
+Shows what changed, asks for confirmation, then pulls the latest. Restart Claude Code after updating to load the new version.
+
+---
+
 ### `/shipit:help`
 
 Shows the full usage guide with all commands and examples.
@@ -591,6 +621,8 @@ shipit/
 │   ├── status.md          # /shipit:status — progress dashboard
 │   ├── debug.md           # /shipit:debug — systematic debugging
 │   ├── done.md            # /shipit:done — verify + finish
+│   ├── discuss.md         # /shipit:discuss — discussion mode
+│   ├── update.md          # /shipit:update — update plugin
 │   └── help.md            # /shipit:help — usage guide
 ├── hooks/
 │   ├── hooks.json         # Hook configuration
