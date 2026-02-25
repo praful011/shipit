@@ -4,7 +4,7 @@
     <strong>One command to ship features. Plan → Execute → Loop → Done.</strong>
   </p>
   <p align="center">
-    <a href="#installation">Install</a> · <a href="#quick-start">Quick Start</a> · <a href="#commands">Commands</a> · <a href="#how-it-works">How It Works</a> · <a href="#architecture">Architecture</a>
+    <a href="#installation">Install</a> · <a href="#quick-start">Quick Start</a> · <a href="#commands">Commands</a> · <a href="#how-it-works">How It Works</a> · <a href="#architecture">Architecture</a> · <a href="#updating">Update</a>
   </p>
   <p align="center">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
@@ -26,6 +26,8 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 - **🔁 Auto-Loop** — Keeps working autonomously until all tasks complete or a blocker is hit
 - **🤖 Multi-Agent** — Specialized agents for planning, execution, debugging, and verification
 - **📋 Task Handoff** — Cumulative HANDOFF.md gives each fresh executor full context of previous work
+- **💬 Discussion Mode** — Chat about your project without code changes via `/shipit:discuss`
+- **⬆️ Easy Updates** — Update to latest version in one command via `/shipit:update`
 - **💾 Persistent State** — Resume across sessions with `.shipit/` state files
 - **📦 Atomic Commits** — One commit per completed task, clean git history
 
@@ -93,6 +95,22 @@ Then install:
 
 ---
 
+## Updating
+
+Already have ShipIt installed? Update to the latest version:
+
+```
+/shipit:update
+```
+
+This will:
+1. Check for new commits on the remote
+2. Show you what changed (commit log + files affected)
+3. Ask for confirmation before pulling
+4. Remind you to restart Claude Code to load the update
+
+---
+
 ## Quick Start
 
 ### Ship a feature in one command
@@ -138,6 +156,14 @@ Review the plan, then approve to start execution.
 ```
 
 Uses the scientific method: reproduce → hypothesize → test → fix.
+
+### Discuss without changing code
+
+```
+/shipit:discuss should we use WebSockets or SSE for real-time updates?
+```
+
+Chat about architecture, approaches, or ideas — ShipIt reads your codebase to give informed answers but won't modify anything.
 
 ---
 
@@ -522,7 +548,7 @@ sequenceDiagram
         else Tasks remain
             SH->>L: Increment iteration
             SH-->>CC: Block exit + inject continuation prompt
-            Note over CC: "Continue working.\nRead STATE.md for position."
+            Note over CC: "Continue working.\nRead STATE.md + HANDOFF.md"
         end
     end
 
@@ -594,6 +620,8 @@ How ShipIt compares to other Claude Code plugins:
 | Multi-agent | 4 specialized agents | Subagent dispatch | 10+ agents | No |
 | Session persistence | `.shipit/` flat files | No | `.planning/` directory | No |
 | Context window display | Statusline with % bar | No | No | No |
+| Discussion mode | `/shipit:discuss` | No | No | No |
+| Self-update | `/shipit:update` | No | `/gsd:update` | No |
 | Debugging workflow | Scientific method | Systematic skill | Debug agent | No |
 | Verification | Verifier agent | Code review skill | Verifier agent | No |
 | Setup complexity | Zero config | Zero config | `PROJECT.md` + roadmap | Zero config |
