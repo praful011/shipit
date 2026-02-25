@@ -58,6 +58,19 @@ Update STATE.md with:
 - `current_task: 1`
 - `total_tasks: <from PLAN.md>`
 
+## Step 4.5: Initialize HANDOFF.md
+
+Create (or reset) `.shipit/HANDOFF.md` for cross-task context sharing. This file is reset on every new plan so previous plan context doesn't leak:
+
+```markdown
+# ShipIt Handoff Log
+
+> Cumulative context from completed tasks. Each executor reads this to understand what previous tasks did.
+
+```
+
+This file will be appended to by each executor agent after completing a task.
+
 ## Step 5: Activate Auto-Loop
 
 ```bash

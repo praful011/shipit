@@ -90,7 +90,7 @@ mv "$TEMP_FILE" "$LOOP_STATE_FILE"
 TASK_TEXT=$(awk '/^---$/{i++; next} i>=2' "$LOOP_STATE_FILE")
 
 # Build continuation prompt
-CONTINUE_PROMPT="Continue working. Read .shipit/STATE.md for current position and .shipit/PLAN.md for the plan. Use TDD for implementation tasks. Update STATE.md after completing each task. When all tasks are done, output <shipit-done/> to exit the loop. If you hit a blocker that needs user input, output <shipit-blocked>description</shipit-blocked>."
+CONTINUE_PROMPT="Continue working. Read .shipit/STATE.md for current position, .shipit/PLAN.md for the plan, and .shipit/HANDOFF.md for context from previous tasks. Use TDD for implementation tasks. After completing each task, append a summary to HANDOFF.md and update STATE.md. When all tasks are done, output <shipit-done/> to exit the loop. If you hit a blocker that needs user input, output <shipit-blocked>description</shipit-blocked>."
 
 SYSTEM_MSG="ShipIt iteration $NEXT_ITERATION | Tasks: ${TASKS_COMPLETED:-0}/${TASKS_TOTAL:-?} | To finish: <shipit-done/>"
 

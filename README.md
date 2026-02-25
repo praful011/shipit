@@ -25,6 +25,7 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 - **🧪 TDD by Default** — Every code change goes through RED → GREEN → REFACTOR
 - **🔁 Auto-Loop** — Keeps working autonomously until all tasks complete or a blocker is hit
 - **🤖 Multi-Agent** — Specialized agents for planning, execution, debugging, and verification
+- **📋 Task Handoff** — Cumulative HANDOFF.md gives each fresh executor full context of previous work
 - **💾 Persistent State** — Resume across sessions with `.shipit/` state files
 - **📦 Atomic Commits** — One commit per completed task, clean git history
 
@@ -103,9 +104,10 @@ Then install:
 That's it. ShipIt will:
 1. **Analyze** your codebase to understand the context
 2. **Plan** the work into atomic tasks
-3. **Execute** each task with TDD (test first, then implement)
-4. **Loop** autonomously until everything's done
-5. **Verify** the result matches the original intent
+3. **Execute** each task with TDD in a fresh context (test first, then implement)
+4. **Handoff** context between tasks via HANDOFF.md
+5. **Loop** autonomously until everything's done
+6. **Verify** the result matches the original intent
 
 ### More examples
 
@@ -297,6 +299,7 @@ ShipIt persists all state in the `.shipit/` directory:
 ├── PROJECT.md      # What the project is about
 ├── STATE.md        # Current progress and position
 ├── PLAN.md         # Active plan with tasks
+├── HANDOFF.md      # Cumulative context from completed tasks
 ├── config.json     # Preferences
 ├── loop.md         # Auto-loop state (managed automatically)
 └── debug/
@@ -308,6 +311,7 @@ ShipIt persists all state in the `.shipit/` directory:
 | `PROJECT.md` | Project description, tech stack, constraints | `/shipit:init` |
 | `STATE.md` | Status, current task number, timestamps | `/shipit:go` |
 | `PLAN.md` | Task list with descriptions and acceptance criteria | Planner agent |
+| `HANDOFF.md` | Cumulative log of completed tasks with context | Executor agent |
 | `config.json` | User preferences | `/shipit:init` |
 | `loop.md` | Loop iteration counter, active flag | Stop hook |
 | `debug/DEBUG.md` | Hypotheses, test results, root cause | Debugger agent |
@@ -330,15 +334,17 @@ flowchart TD
     B -->|Large: 6+ files| D
 
     D --> E["📋 PLAN.md\n(atomic tasks)"]
-    E --> F["🤖 Executor Agent\n(Task 1)"]
-    F --> G{"TDD Enabled?"}
+    E --> F["🤖 Executor Agent\n(Fresh Context)"]
+    F --> F0["📋 Read HANDOFF.md\n(previous task context)"]
+    F0 --> G{"TDD Enabled?"}
     G -->|Yes| H["🔴 RED: Write failing test"]
     H --> I["🟢 GREEN: Minimal code to pass"]
     I --> J["🔵 REFACTOR: Clean up"]
     G -->|No| K["Implement + Verify"]
     J --> L["📦 Atomic Commit"]
     K --> L
-    L --> M{"More Tasks?"}
+    L --> L0["📝 Append to HANDOFF.md"]
+    L0 --> M{"More Tasks?"}
     M -->|Yes| N["🔁 Auto-Loop\n(Stop Hook)"]
     N --> F
     M -->|No| O["🤖 Verifier Agent"]
@@ -387,6 +393,7 @@ graph TB
         PROJECT["PROJECT.md"]
         STATE["STATE.md"]
         PLANFILE["PLAN.md"]
+        HANDOFF["HANDOFF.md"]
         LOOP["loop.md"]
         DEBUGFILE["debug/DEBUG.md"]
     end
@@ -400,6 +407,7 @@ graph TB
     PLANNER -->|writes| PLANFILE
     PLANNER -->|updates| STATE
     EXECUTOR -->|reads| PLANFILE
+    EXECUTOR -->|reads + appends| HANDOFF
     EXECUTOR -->|updates| STATE
     DEBUGGER -->|writes| DEBUGFILE
     VERIFIER -->|reads| PLANFILE
@@ -410,6 +418,49 @@ graph TB
     style DEBUGGER fill:#fce4ec,stroke:#c62828
     style VERIFIER fill:#e3f2fd,stroke:#1565c0
 ```
+
+### Task Handoff (HANDOFF.md)
+
+Each executor agent runs in a **fresh context window** (via Claude Code's Task tool). This means each task starts clean — no context overflow, even on large plans. But fresh context also means the executor has no knowledge of what previous tasks did.
+
+**HANDOFF.md** solves this. It's a cumulative log that each executor reads at start and appends to at finish:
+
+```markdown
+# ShipIt Handoff Log
+
+## Task 1: Set up Stripe SDK ✅
+- **Files changed:** src/config/stripe.ts, package.json
+- **What was done:** Installed stripe@14, created config with env var
+- **Key decisions:** Used STRIPE_SECRET_KEY env var, added to .env.example
+- **Context for next tasks:** Import stripe config from src/config/stripe.ts
+
+## Task 2: Create payment endpoint ✅
+- **Files changed:** src/api/payments.ts, src/api/payments.test.ts
+- **What was done:** POST /api/payments creates payment intent
+- **Key decisions:** Returns client_secret directly, validates amount > 0
+- **Context for next tasks:** Endpoint expects {amount, currency} body
+```
+
+**Key behaviors:**
+- **Reset per plan** — HANDOFF.md is created fresh with each `/shipit:go` command, so previous plan context doesn't leak
+- **Cumulative within a plan** — Each completed task appends its entry, so Task 5 knows what Tasks 1-4 did
+- **Concise entries** — Each task summary is ~4-5 lines, keeping the file small even for large plans
+
+This gives ShipIt the best of both worlds: fresh executor context (no overflow) + full knowledge of previous work (no blind spots).
+
+### Context Window Display
+
+During loop execution, the statusline shows real-time context window usage next to the loop counter:
+
+```
+ShipIt │ ⎇ main │ Add auth │ 🚀 2/5 │ 🔁 3/50 ███░░░░░░░ 39% │ ⏱ 12m │ Opus 4.6 │ my-app
+```
+
+The context bar uses color coding:
+- **Green** (0-62%) — Plenty of room
+- **Yellow** (63-80%) — Getting full
+- **Orange** (81-94%) — Nearly full
+- **Red + skull** (95%+) — Critical, loop will likely end soon
 
 ### Auto-Loop Mechanism
 
@@ -481,6 +532,7 @@ sequenceDiagram
 
     S1->>FS: Write PROJECT.md
     S1->>FS: Write PLAN.md (5 tasks)
+    S1->>FS: Write HANDOFF.md (tasks 1-2 context)
     S1->>FS: Write STATE.md (task 3/5)
 
     Note over S1: Context limit reached ❌
@@ -489,8 +541,9 @@ sequenceDiagram
 
     S2->>FS: Read STATE.md → task 3/5
     S2->>FS: Read PLAN.md → remaining tasks
-    S2->>S2: Continue from task 3
-    S2->>FS: Update STATE.md (task 5/5)
+    S2->>FS: Read HANDOFF.md → context from tasks 1-2
+    S2->>S2: Continue from task 3 (with full context)
+    S2->>FS: Append to HANDOFF.md (tasks 3-5)
     S2->>FS: Update STATE.md (complete ✅)
 ```
 
@@ -506,8 +559,11 @@ How ShipIt compares to other Claude Code plugins:
 | Smart task decomposition | Auto-detect complexity | Manual planning | Phase-based roadmap | N/A |
 | TDD enforcement | Built-in hard gate | Skill (optional) | No | No |
 | Auto-loop | Stop hook based | No | No | Stop hook based |
+| Fresh executor context | Yes (Task subagents) | No | Yes | No (same session) |
+| Cross-task context | HANDOFF.md | No | No | No (relies on files) |
 | Multi-agent | 4 specialized agents | Subagent dispatch | 10+ agents | No |
 | Session persistence | `.shipit/` flat files | No | `.planning/` directory | No |
+| Context window display | Statusline with % bar | No | No | No |
 | Debugging workflow | Scientific method | Systematic skill | Debug agent | No |
 | Verification | Verifier agent | Code review skill | Verifier agent | No |
 | Setup complexity | Zero config | Zero config | `PROJECT.md` + roadmap | Zero config |

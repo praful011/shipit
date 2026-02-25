@@ -141,7 +141,7 @@ process.stdin.on('end', () => {
       }
     }
 
-    // --- Loop state ---
+    // --- Loop state + context window ---
     let loopInfo = '';
     const loopFile = path.join(dir, '.shipit', 'loop.md');
     if (fs.existsSync(loopFile)) {
@@ -153,7 +153,12 @@ process.stdin.on('end', () => {
         if (activeMatch && activeMatch[1].trim() === 'true' && iterMatch) {
           const iter = iterMatch[1].trim();
           const max = maxMatch ? maxMatch[1].trim() : '?';
-          loopInfo = `\x1b[33m\u{1F501} ${iter}/${max}\x1b[0m`;
+          // Show loop iteration with context window inline
+          if (ctx) {
+            loopInfo = `\x1b[33m\u{1F501} ${iter}/${max}\x1b[0m${ctx}`;
+          } else {
+            loopInfo = `\x1b[33m\u{1F501} ${iter}/${max}\x1b[0m`;
+          }
         }
       } catch (e) {}
     }
@@ -194,7 +199,7 @@ process.stdin.on('end', () => {
     // TDD phase (● RED/GREEN/REFACTOR)
     if (tddPhase) segments.push(tddPhase);
 
-    // Loop (🔁 3/50)
+    // Loop (🔁 3/50) — includes context bar when loop is active
     if (loopInfo) segments.push(loopInfo);
 
     // Elapsed (⏱ 12m)
@@ -202,7 +207,9 @@ process.stdin.on('end', () => {
 
     // Model | Dir | Context (always)
     segments.push(`\x1b[2m${model}\x1b[0m`);
-    segments.push(`\x1b[2m${dirname}\x1b[0m${ctx}`);
+    // If loop is active, context bar is already shown with loop info — don't duplicate
+    const loopHasCtx = loopInfo && ctx;
+    segments.push(`\x1b[2m${dirname}\x1b[0m${loopHasCtx ? '' : ctx}`);
 
     process.stdout.write(segments.join(SEP));
   } catch (e) {

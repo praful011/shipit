@@ -21,6 +21,8 @@ Resume work from a previous session by reading persistent state.
 
 Read `.shipit/STATE.md`. If it doesn't exist, tell the user "No previous session found. Run `/shipit:init` or `/shipit:go <task>` to start."
 
+Also read `.shipit/HANDOFF.md` if it exists — this contains context from previously completed tasks in the current plan.
+
 ## Step 2: Show Summary
 
 Display:
@@ -28,11 +30,13 @@ Display:
 - Last task status
 - Tasks completed / total
 - Last updated timestamp
+- If HANDOFF.md exists: brief summary of what previous tasks accomplished
 
 ## Step 3: Resume
 
 If `status: executing` and PLAN.md exists:
 - Show which task was in progress
+- Show context from HANDOFF.md so user can see what was already done
 - Ask: "Continue from task N?" (default: yes)
 - On yes: activate loop and continue execution (same as `/shipit:go`)
 
