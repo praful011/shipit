@@ -26,6 +26,23 @@ Read these files if they exist (silently skip if missing):
 - `.shipit/STATE.md`
 - `.shipit/config.json`
 
+## Step 1.5: Prompt Review
+
+Review and improve the user's task prompt before proceeding.
+
+Follow the process defined in the `prompt-review` skill (`skills/prompt-review/SKILL.md`):
+
+1. **Score the original prompt** on Clarity (25%), Specificity (25%), Actionability (25%), Grammar (15%), Scope (10%)
+2. **Generate an improved version** — fix spelling, expand vague terms, add implicit requirements, use imperative language
+3. **Score the improved version** using the same criteria
+4. **Present both to the user** using AskUserQuestion:
+   - Show original prompt and its score
+   - Show improved prompt and its score
+   - Option 1: "Continue with improved prompt (Recommended)"
+   - Option 2: "Keep my original prompt"
+5. **Save to history** — Append the entry to `.shipit/prompts/history.md` (create file and directory if needed)
+6. **Use the chosen prompt** as `$ARGUMENTS` for all subsequent steps
+
 ## Step 2: Analyze Task Complexity
 
 Examine the codebase to understand what the task requires:
