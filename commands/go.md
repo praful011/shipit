@@ -195,13 +195,35 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/setup-loop.sh "$ARGUMENTS" --max-iterations <from 
 - Update STATE.md: `status: complete`
 - Output `<shipit-done/>`
 
-**If planned tasks:**
-Spawn shipit-executor agent for the current task:
-```
-Task(subagent_type="shipit:shipit-executor", prompt="First, read your agent definition at agents/shipit-executor.md for your role and instructions.\n\nExecute task N from .shipit/PLAN.md\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/STATE.md\n.shipit/config.json\n.shipit/HANDOFF.md\n</files_to_read>")
-```
+**If planned tasks — wave-based execution:**
 
-After executor completes, spawn shipit-reviewer to review the task:
+Read PLAN.md and group tasks by their **Wave** field. Execute waves sequentially, but tasks WITHIN the same wave can run in parallel.
+
+**For each wave:**
+
+1. **Describe what's being built** (before spawning):
+   - Read each task's Do field
+   - Output: "Wave N: Building [description of what this wave delivers]"
+
+2. **Spawn executor agents:**
+
+   **If wave has 1 task:** Spawn single executor (see prompt template in `prompts/executor-prompt.md`):
+   ```
+   Task(subagent_type="shipit:shipit-executor", prompt="First, read your agent definition at agents/shipit-executor.md for your role and instructions.\n\nExecute task N from .shipit/PLAN.md\n\n## Scene Setting\n[what this task builds and why]\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/STATE.md\n.shipit/config.json\n.shipit/HANDOFF.md\n</files_to_read>")
+   ```
+
+   **If wave has 2+ tasks:** Spawn executors in PARALLEL (multiple Task calls in single message):
+   ```
+   # Spawn all wave tasks simultaneously
+   Task(subagent_type="shipit:shipit-executor", prompt="...Execute task A...")
+   Task(subagent_type="shipit:shipit-executor", prompt="...Execute task B...")
+   ```
+
+   **Parallel safety:** Tasks in the same wave MUST NOT modify the same files (planner guarantees this).
+
+3. **After ALL executors in the wave complete:**
+
+After each executor completes, spawn shipit-reviewer to review the task:
 ```
 Task(subagent_type="shipit:shipit-reviewer", prompt="First, read your agent definition at agents/shipit-reviewer.md for your role and instructions.\n\nReview task N that was just completed.\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/HANDOFF.md\n</files_to_read>")
 ```

@@ -17,6 +17,7 @@ If the prompt contains a `<files_to_read>` block, you MUST use the Read tool to 
 **Core responsibilities:**
 - Parse and honor user requirements from the task description (NON-NEGOTIABLE)
 - Decompose tasks into atomic, dependency-ordered steps (2-4 tasks, max 5 for large)
+- Analyze dependencies and assign execution waves for parallel execution
 - Specify exact file paths, acceptance criteria, and TDD flags for each task
 - Write `.shipit/PLAN.md` in the required format
 - Update `.shipit/STATE.md` with plan metadata
@@ -89,13 +90,34 @@ complexity: quick|medium|large
 - **Do:** <specific implementation instructions — not vague descriptions>
 - **TDD:** yes|no
 - **Verify:** <exact command or check to confirm it works>
+- **Wave:** 1
+- **Depends:** none
 
 ## Task 2: <name>
 - **Files:** <exact file paths>
 - **Do:** <specific implementation instructions>
 - **TDD:** yes|no
 - **Verify:** <exact command or check>
+- **Wave:** 1 (same wave = can run in parallel with Task 1)
+- **Depends:** none
+
+## Task 3: <name>
+- **Files:** <exact file paths>
+- **Do:** <specific implementation instructions>
+- **TDD:** yes|no
+- **Verify:** <exact command or check>
+- **Wave:** 2 (depends on wave 1 tasks)
+- **Depends:** Task 1, Task 2
 ```
+
+### Wave Assignment Rules
+
+- Tasks with NO dependencies on other tasks → **Wave 1** (can run in parallel)
+- Tasks that depend on Wave 1 tasks → **Wave 2**
+- Tasks that depend on Wave 2 tasks → **Wave 3**
+- **All tasks in the same wave can execute in parallel** (they touch different files)
+- **Waves execute sequentially** (Wave 1 must complete before Wave 2 starts)
+- Tasks in the same wave MUST NOT modify the same files (no conflicts)
 
 ## Step 5: Update STATE.md
 
@@ -154,7 +176,7 @@ Update `.shipit/STATE.md`:
 - [ ] Codebase explored (relevant files found and read)
 - [ ] Complexity classified
 - [ ] `.shipit/PLAN.md` written with correct frontmatter and task format
-- [ ] Every task has: Files, Do, TDD, Verify fields
+- [ ] Every task has: Files, Do, TDD, Verify, Wave, Depends fields
 - [ ] Every **Do** field is specific and imperative (not vague)
 - [ ] Every **Verify** field has an exact command
 - [ ] Tasks ordered by dependency
