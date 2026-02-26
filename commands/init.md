@@ -47,11 +47,42 @@ Create `.shipit/PROJECT.md` (under 50 lines) with:
 - Tech stack (detected + confirmed)
 - Constraints (if any)
 
-## Step 5: Confirm
+## Step 5: Create Default Config
+
+Create `.shipit/config.json` with defaults:
+
+```json
+{
+  "tdd": true,
+  "auto_loop": true,
+  "max_iterations": 50,
+  "auto_commit": true,
+  "parallel_execution": true,
+  "max_parallel_agents": 3,
+  "model_profile": "balanced",
+  "model_overrides": {}
+}
+```
+
+**Config Schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `tdd` | boolean | `true` | Enforce TDD (RED-GREEN-REFACTOR) for code changes |
+| `auto_loop` | boolean | `true` | Keep working autonomously until done or blocked |
+| `max_iterations` | number (1-200) | `50` | Maximum loop iterations before stopping |
+| `auto_commit` | boolean | `true` | Commit after each completed task |
+| `parallel_execution` | boolean | `true` | Allow parallel agent execution within waves |
+| `max_parallel_agents` | number (1-5) | `3` | Maximum concurrent agents per wave |
+| `model_profile` | string | `"balanced"` | Agent model selection: "quality", "balanced", or "budget" |
+| `model_overrides` | object | `{}` | Override specific agent models (e.g., `{"executor": "opus"}`) |
+
+## Step 6: Confirm
 
 Tell the user:
 - Project initialized at `.shipit/`
-- Show what was created
+- Show what was created (PROJECT.md, STATE.md, config.json)
+- Show model profile setting and what it means
 - Suggest: "Run `/shipit:go <task>` to start working"
 
 </process>

@@ -7,76 +7,100 @@ allowed-tools: []
 Display this help text to the user:
 
 ```
-# ShipIt — Unified Development Plugin
+# ShipIt v2.0 — Unified Development Plugin
 
 ## Commands
 
-### /shipit:go <task>
-The main command. Auto-detects task complexity and executes with TDD.
-Examples:
-  /shipit:go add user authentication with JWT
-  /shipit:go fix the login bug where sessions expire early
-  /shipit:go refactor the payment module to use Stripe SDK v3
+### Core Workflow
+  /shipit:go <task>       The main command. Reviews prompt, plans, executes with TDD, loops until done.
+  /shipit:quick <task>    Fast execution for simple tasks (1-2 files). Skip agents, just TDD and commit.
+  /shipit:plan <desc>     Create and review a plan before executing.
 
-### /shipit:plan <description>
-Create a plan and review it before executing.
-Examples:
+### Session Management
+  /shipit:init [name]     Set up a new project. Creates .shipit/ with PROJECT.md and config.json.
+  /shipit:resume          Resume work from a previous session. Spawns conductor to continue.
+  /shipit:status          Show current progress dashboard.
+  /shipit:done            Verify work and finish (commit, PR, or report).
+
+### Safety & Debugging
+  /shipit:debug <issue>   Systematic debugging with persistent state.
+  /shipit:health          Diagnose and repair ShipIt state files.
+  /shipit:rollback        Rollback to a previous task checkpoint.
+
+### Other
+  /shipit:discuss <topic> Chat about your project without code changes.
+  /shipit:update          Update ShipIt to the latest version.
+  /shipit:help            This help text.
+
+## Examples
+
+  /shipit:go add user authentication with JWT tokens
+  /shipit:go fix the cart total not updating on item removal
+  /shipit:quick fix the typo in the login error message
   /shipit:plan redesign the database schema for multi-tenancy
-
-### /shipit:init [name]
-Set up a new project. Creates .shipit/ with PROJECT.md and config.
-Examples:
-  /shipit:init my-saas-app
-
-### /shipit:resume
-Resume work from a previous session.
-
-### /shipit:status
-Show current progress dashboard.
-
-### /shipit:debug <issue>
-Systematic debugging with persistent state.
-Examples:
   /shipit:debug login returns 403 after password reset
+  /shipit:discuss should we use WebSockets or SSE for real-time?
+  /shipit:health
+  /shipit:rollback
 
-### /shipit:done
-Verify work and finish (commit, PR, or just report).
+## How /shipit:go Works (Thin Orchestrator)
 
-### /shipit:discuss <topic>
-Discussion mode — chat about your project without code changes.
-Examples:
-  /shipit:discuss should we use Redis or Memcached for caching?
-  /shipit:discuss walk me through the auth flow
-  /shipit:discuss what's the best way to handle file uploads?
+  Main (~15% context):
+    1. Load context → 2. Review prompt → 3. Analyze complexity → 4. Branch → 5. Spawn conductor
 
-### /shipit:update
-Update ShipIt to the latest version from remote.
+  Conductor (fresh 200k context):
+    6. Research (large only) → 7. Plan → 8. Validate plan → 9. Execute waves
+    → 10. Review each task → 11. Verify → 12. Integration check → Done!
 
-### /shipit:help
-This help text.
+## Model Profiles (config.json)
 
-## How It Works
+  "quality"   — Best output, higher cost (opus for key agents)
+  "balanced"  — Good quality, reasonable cost (default, sonnet + haiku)
+  "budget"    — Fastest, lowest cost (haiku for most agents)
 
-1. /shipit:go auto-detects task complexity (quick/medium/large)
-2. For medium/large tasks, it creates a plan with atomic steps
-3. Each step is executed with TDD (test first, then implement)
-4. An auto-loop keeps going until all tasks complete
-5. State persists in .shipit/ so you can resume across sessions
+  Set in .shipit/config.json: "model_profile": "balanced"
+  Override specific agents: "model_overrides": {"executor": "opus"}
+
+## Agents (9 total)
+
+  Conductor          Orchestrates plan-to-completion in fresh context
+  Researcher         Explores codebase before planning (large tasks)
+  Planner            Creates atomic tasks with wave assignments
+  Plan Checker       Validates plan across 8 dimensions
+  Executor           Implements task with TDD + git checkpoints
+  Reviewer           Per-task code review (spec + quality)
+  Verifier           Validates completed work against intent
+  Integration Checker Checks cross-task E2E flows
+  Debugger           Scientific debugging with persistent state
 
 ## State Files (.shipit/)
 
-- PROJECT.md — What the project is about
-- STATE.md — Current progress and position
-- PLAN.md — Active plan with tasks
-- HANDOFF.md — Cumulative context from completed tasks
-- config.json — Preferences (TDD, loop, parallelism)
-- loop.md — Auto-loop state (managed automatically)
-- debug/DEBUG.md — Debugging session state
+  PROJECT.md          What the project is about
+  STATE.md            Current progress and position
+  PLAN.md             Active plan with tasks and waves
+  RESEARCH.md         Pre-planning research (large tasks)
+  HANDOFF.md          Cumulative context from completed tasks
+  DEFERRED.md         Out-of-scope issues for later
+  config.json         Preferences, model profile, parallelism
+  loop.md             Auto-loop state (managed automatically)
+  handoffs/task-N.md  Per-task handoff files (parallel-safe)
+  prompts/history.md  Prompt review history log
+  debug/DEBUG.md      Debugging session state
+
+## Git Checkpoints
+
+  Each task creates: shipit/checkpoint-task-N
+  Rollback anytime: /shipit:rollback
+  Backup branch created before any rollback.
 
 ## Configuration (.shipit/config.json)
 
-  tdd: true          — Enforce TDD (default: true)
-  auto_loop: true    — Enable auto-loop (default: true)
-  max_iterations: 50 — Max loop iterations (default: 50)
-  auto_commit: true  — Commit after each task (default: true)
+  tdd: true                    Enforce TDD (default: true)
+  auto_loop: true              Enable auto-loop (default: true)
+  max_iterations: 50           Max loop iterations (default: 50)
+  auto_commit: true            Commit after each task (default: true)
+  parallel_execution: true     Allow parallel agents (default: true)
+  max_parallel_agents: 3       Max concurrent agents (default: 3)
+  model_profile: "balanced"    Agent model selection
+  model_overrides: {}          Override specific agent models
 ```

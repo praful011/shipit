@@ -56,6 +56,18 @@ Read the files listed in the task's **Files** field. Understand the current stat
 
 **GATE: All files listed in the task have been read.**
 
+## Step 3.5: Create Checkpoint
+
+**CRITICAL: Create a git checkpoint BEFORE making any changes.** This allows safe rollback via `/shipit:rollback`.
+
+```bash
+git tag "shipit/checkpoint-task-$TASK_NUMBER" HEAD
+```
+
+This tags the current HEAD so the codebase can be restored to its pre-task state if something goes wrong.
+
+**GATE: Checkpoint tag created.**
+
 ## Step 4: Execute
 
 **If task has TDD: yes AND config.tdd is true:**
@@ -113,11 +125,18 @@ git commit -m "{type}: {task-name}
 
 **GATE: `git log -1` MUST show the new commit.**
 
-## Step 6: Append to HANDOFF.md
+## Step 6: Write Task Handoff
 
-**CRITICAL: Only APPEND to HANDOFF.md. Do NOT rewrite the entire file.**
+**Parallel-safe handoff:** Write your task summary to an INDIVIDUAL file, NOT directly to HANDOFF.md. This prevents write conflicts when multiple executors run in the same wave.
 
-Add this block at the end:
+**Write to:** `.shipit/handoffs/task-N.md` (where N is your task number)
+
+Create the `.shipit/handoffs/` directory if it doesn't exist:
+```bash
+mkdir -p .shipit/handoffs
+```
+
+Write this content to `.shipit/handoffs/task-N.md`:
 
 ```markdown
 ## Task N: <task name>
@@ -127,6 +146,10 @@ Add this block at the end:
 - **Context for next tasks:** <anything the next task needs to know>
 - **Commit:** <short commit hash>
 ```
+
+**The conductor will merge your handoff into HANDOFF.md after the wave completes.** Do NOT write to HANDOFF.md directly.
+
+**Fallback:** If no `.shipit/handoffs/` directory exists and you're running as a solo executor (not parallel), you MAY append directly to HANDOFF.md. Only APPEND, never rewrite.
 
 ## Step 7: Update STATE.md
 
@@ -235,6 +258,7 @@ When `current_task > total_tasks`:
 - [ ] All `<files_to_read>` files loaded before any other action
 - [ ] CLAUDE.md read if it exists
 - [ ] HANDOFF.md reviewed for previous task context
+- [ ] Git checkpoint tag created before any changes
 - [ ] Task files read before implementation
 - [ ] TDD enforced (if enabled): test written FIRST, seen to FAIL, then implementation
 - [ ] Verify command run and shows success

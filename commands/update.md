@@ -32,7 +32,12 @@ If no git repo found, tell the user:
 cd <plugin-dir> && git log --oneline -1
 ```
 
-Read `.claude-plugin/plugin.json` to get the current version number.
+Read the `VERSION` file for the current version number:
+```bash
+cat <plugin-dir>/VERSION
+```
+
+Also read `.claude-plugin/plugin.json` for the plugin metadata version.
 
 ## Step 3: Fetch Latest
 
@@ -74,12 +79,14 @@ cd <plugin-dir> && git pull origin main
 
 ## Step 7: Show Result
 
-Read the updated `.claude-plugin/plugin.json` for the new version.
+Read the updated `VERSION` file and `CHANGELOG.md` for the new version details.
 
 Display:
-- Previous version/commit
-- New version/commit
-- Summary of what changed
+- Previous version → New version
+- Previous commit → New commit
+- Changes from CHANGELOG.md (just the latest version section)
 - Reminder: "Restart Claude Code to load the updated plugin."
+
+If `CHANGELOG.md` exists, show the relevant section for the new version so the user knows what changed.
 
 </process>
