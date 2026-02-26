@@ -27,6 +27,13 @@ Before executing, discover project context:
 4. `.shipit/HANDOFF.md` — context from previous tasks
 
 The HANDOFF.md file contains a cumulative log of what previous tasks accomplished. **You MUST read it carefully** to understand what has already been done and avoid conflicting with previous work.
+
+**Mandatory discovery protocol:**
+1. Read `./CLAUDE.md` — project instructions, conventions, constraints
+2. Check for `.agents/skills/` directory — if it exists, read SKILL.md files for project-specific patterns
+3. Follow project-specific test runner, linter, and build conventions discovered in CLAUDE.md
+
+This discovery is MANDATORY. Do NOT skip it even if you think you know the project.
 </project_context>
 
 <process>
@@ -161,7 +168,59 @@ Action: STOP → output `<shipit-blocked>description of architectural decision n
 
 No user permission needed for Rules 1-3. Track all deviations in HANDOFF.md entry.
 
+**Auto-fix attempt limit:** Max 3 auto-fix attempts per task for Rules 1-3. After 3 attempts:
+- Document the issue in `.shipit/DEFERRED.md`
+- Log in HANDOFF.md: "Deferred: <issue description>"
+- Continue with current task (do not block on unfixable side issues)
+
+**Scope boundary:** Only fix issues DIRECTLY caused by the current task. Pre-existing bugs, warnings, or tech debt that existed before this task MUST be logged to `.shipit/DEFERRED.md`, NOT fixed inline.
+
 </deviation_rules>
+
+<rationalization_prevention>
+
+**CRITICAL: If you catch yourself thinking any of these, STOP. You are about to violate the ShipIt process.**
+
+| Thought | Reality | Action |
+|---------|---------|--------|
+| "This is too simple to need TDD" | That is rationalization. Simple code has simple tests. Write the test. | STOP → Write the test first |
+| "I'll write the test after the code" | TDD means test FIRST. "After" means never. | STOP → Delete code, start with test |
+| "Just this once I'll skip it" | "Just this once" always means "every time." | STOP → Follow the process |
+| "The test would be trivial anyway" | Trivial tests catch trivial regressions. Write it. | STOP → Write the test |
+| "I already know this works" | You don't know until the test proves it. | STOP → Write the test |
+| "Let me fix this unrelated issue I found" | That's scope creep. Log it to DEFERRED.md. | STOP → Log to DEFERRED.md |
+| "This pre-existing bug is easy to fix" | Not your task. Log it. | STOP → Log to DEFERRED.md |
+| "I'll just clean up this code while I'm here" | Not your task. Focus. | STOP → Only change what the task requires |
+| "I don't need to read HANDOFF.md, I already know the context" | You don't. Read it. Previous tasks may have changed things. | STOP → Read HANDOFF.md |
+| "git add . is faster" | And also stages secrets, build artifacts, and unrelated changes. | STOP → Stage files individually |
+
+**The rule:** If a thought starts with "just", "already", "too simple", "I'll do it later", or "while I'm here" — that thought is a violation. Stop and follow the process.
+
+</rationalization_prevention>
+
+<deferred_items>
+
+When you encounter issues outside the current task scope, append to `.shipit/DEFERRED.md`:
+
+```markdown
+## <timestamp> — <short description>
+- **Found during:** Task N
+- **Type:** bug | tech-debt | improvement | missing-feature
+- **Files:** <affected files>
+- **Details:** <what's wrong and why it matters>
+- **Priority:** low | medium | high
+```
+
+Create the file with this header if it doesn't exist:
+
+```markdown
+# ShipIt Deferred Items
+
+> Issues found during execution that are outside current task scope. Review these after the current plan completes.
+
+```
+
+</deferred_items>
 
 <after_last_task>
 

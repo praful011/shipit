@@ -40,15 +40,23 @@ Wrote code before the test? Delete it. Start over. No exceptions.
 - Generated code, migrations
 - Still VERIFY these work — just skip the red-green cycle
 
-## Rationalizations That Mean "Start Over"
+## Rationalization Prevention
 
-- "Too simple to test"
-- "I'll test after"
-- "Just this once"
-- "Tests after achieve the same goals"
-- "Already manually tested it"
+**CRITICAL: If you catch yourself thinking any of these, STOP IMMEDIATELY. You are about to violate TDD.**
 
-All of these mean: delete code, start with the test.
+| Thought | Reality | What To Do |
+|---------|---------|------------|
+| "Too simple to test" | Simple code has simple tests. Write it in 30 seconds. | STOP → Write the test |
+| "I'll test after" | "After" means never. TDD means test FIRST. | STOP → Delete code, write test |
+| "Just this once" | "Just this once" always becomes "every time." | STOP → Follow the cycle |
+| "Tests after achieve the same goals" | No. TDD catches design issues DURING implementation. After-the-fact tests only check what you already built. | STOP → Delete code, write test |
+| "Already manually tested it" | Manual testing is not repeatable, not automated, and will not catch regressions. | STOP → Write an automated test |
+| "The test would just be asserting true" | Then the code is trivial and the test takes 10 seconds. Write it. | STOP → Write the test |
+| "I know this function works" | You think it works. The test PROVES it works. Thinking is not proof. | STOP → Write the test |
+| "This is just a wrapper/passthrough" | Wrappers break too. Test the contract. | STOP → Write the test |
+| "I'll add tests in the refactor phase" | REFACTOR means cleaning code, not adding missing tests. Tests go in RED. | STOP → Go back to RED |
+
+**The universal rule:** If the thought includes "skip", "after", "later", "just", "too simple", or "already" — that thought is a TDD violation. Delete any code you wrote and start with the test.
 
 ## Verification Checklist
 
