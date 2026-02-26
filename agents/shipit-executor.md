@@ -44,6 +44,16 @@ Read STATE.md to get `current_task` number. Find that task in PLAN.md.
 
 **GATE: You MUST know your task number and have read its full description before proceeding.**
 
+## Step 1.5: Re-anchor to Original Task
+
+**CRITICAL: Re-read the ORIGINAL task description from PLAN.md frontmatter `task:` field.** This is the user's original intent. Compare your current task against it to ensure you haven't drifted.
+
+Also read `.shipit/PROJECT_CONTEXT.md` if it exists — it contains shared codebase patterns that ALL agents must follow for consistency.
+
+Also read `.shipit/LESSONS.md` if it exists — it contains learnings from previous task reviews. If a reviewer flagged "missing error handling" on Task 1, you MUST add error handling on Task 2.
+
+**GATE: Original task re-read. LESSONS.md reviewed. PROJECT_CONTEXT.md patterns understood.**
+
 ## Step 2: Review Handoff
 
 Read HANDOFF.md to understand what previous tasks did, what decisions were made, and what context you need.
@@ -95,6 +105,26 @@ c. Confirm it works
 
 **GATE: Verify command MUST have been run and MUST show success.**
 
+## Step 4.5: Self-Review Before Commit
+
+**CRITICAL: Review your own diff before committing.** This catches leftover debug code, unnecessary changes, and drift.
+
+```bash
+git diff
+```
+
+Check your diff for:
+- [ ] No `console.log`, `print()`, or debug statements left
+- [ ] No TODO/FIXME comments in new code
+- [ ] No commented-out code blocks
+- [ ] Only task-relevant files are changed (no unrelated modifications)
+- [ ] Code follows patterns from `PROJECT_CONTEXT.md` (if it exists)
+- [ ] Error handling is present where needed (learned from LESSONS.md)
+
+**If you find issues:** Fix them BEFORE staging. Then re-run tests to confirm nothing broke.
+
+**GATE: Self-review completed. No debug artifacts or unnecessary changes.**
+
 ## Step 5: Commit
 
 **CRITICAL: Stage files individually. NEVER use `git add .` or `git add -A`.**
@@ -124,6 +154,41 @@ git commit -m "{type}: {task-name}
 ```
 
 **GATE: `git log -1` MUST show the new commit.**
+
+## Step 5.5: Generate Receipt
+
+**CRITICAL: Write a receipt file proving this task was executed with evidence.** The conductor and reviewer verify receipts exist — no receipt means no progress.
+
+Write to `.shipit/receipts/task-N.json`:
+
+```bash
+mkdir -p .shipit/receipts
+```
+
+```json
+{
+  "task": N,
+  "timestamp": "<ISO timestamp>",
+  "commit": "<short commit hash from git log -1 --format=%h>",
+  "tests_run": true,
+  "test_output_summary": "<e.g., 12 passed, 0 failed>",
+  "verify_command": "<the exact verify command from PLAN.md>",
+  "verify_result": "pass",
+  "files_changed": ["<file1>", "<file2>"],
+  "self_review": true,
+  "tdd_compliant": true,
+  "checkpoint_tag": "shipit/checkpoint-task-N"
+}
+```
+
+**This receipt is MACHINE-VERIFIABLE proof that you:**
+1. Ran tests (not just claimed they pass)
+2. Ran the verify command
+3. Performed self-review
+4. Created the checkpoint
+5. Committed the code
+
+**GATE: Receipt file written with all fields populated.**
 
 ## Step 6: Write Task Handoff
 
@@ -257,11 +322,16 @@ When `current_task > total_tasks`:
 <success_criteria>
 - [ ] All `<files_to_read>` files loaded before any other action
 - [ ] CLAUDE.md read if it exists
+- [ ] Re-anchored to original task description (from PLAN.md frontmatter)
+- [ ] LESSONS.md reviewed (if exists) — learnings from previous reviews applied
+- [ ] PROJECT_CONTEXT.md reviewed (if exists) — code patterns followed
 - [ ] HANDOFF.md reviewed for previous task context
 - [ ] Git checkpoint tag created before any changes
 - [ ] Task files read before implementation
 - [ ] TDD enforced (if enabled): test written FIRST, seen to FAIL, then implementation
 - [ ] Verify command run and shows success
+- [ ] Self-review completed (no debug code, no unnecessary changes)
+- [ ] Receipt file written to `.shipit/receipts/task-N.json`
 - [ ] Files staged individually (never `git add .`)
 - [ ] Atomic commit created with proper type prefix
 - [ ] HANDOFF.md appended (not rewritten) with task summary

@@ -41,14 +41,19 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 5. **Delegate to conductor** — Spawn shipit-conductor with task context and model profile
 
 **Conductor agent (fresh 200k context):**
-6. **Research** — For large tasks: spawn shipit-researcher to explore before planning
-7. **Plan** — Spawn shipit-planner to write PLAN.md (2-5 tasks max)
-8. **Validate plan** — Spawn shipit-plan-checker (8 dimensions, max 2 revision iterations)
-9. **Execute waves** — Spawn shipit-executor agents (parallel within waves, sequential across waves)
-10. **Review each task** — Spawn shipit-reviewer after each executor (spec compliance + code quality)
-11. **Verify** — Spawn shipit-verifier to validate completed work
-12. **Integration check** — Spawn shipit-integration-checker for cross-task E2E verification
-13. **Return status** — Returns complete/incomplete/blocked/failed to main orchestrator
+6. **Generate codebase context** — Write `.shipit/PROJECT_CONTEXT.md` with real code examples and conventions
+7. **Auto-CLAUDE.md** — If no `CLAUDE.md` exists, generate one from codebase analysis
+8. **Requirement discovery** — If Specificity < 60%, ask 2-4 focused questions to surface hidden requirements
+9. **Research** — For large tasks: spawn shipit-researcher to explore before planning
+10. **Plan** — Spawn shipit-planner to write PLAN.md (2-5 tasks max)
+11. **Validate plan** — Spawn shipit-plan-checker (8 dimensions, max 2 revision iterations)
+12. **Execute waves** — Spawn shipit-executor agents (parallel within waves, sequential across waves)
+13. **Verify receipts** — Check `.shipit/receipts/task-N.json` for proof of execution
+14. **Review each task** — Spawn shipit-reviewer after each executor (spec + quality + pattern compliance)
+15. **Extract lessons** — Write review findings to `.shipit/LESSONS.md` for future executors
+16. **Verify** — Spawn shipit-verifier for epic-level requirement review (not just plan completion)
+17. **Integration check** — Spawn shipit-integration-checker for cross-task E2E verification
+18. **Return status** — Returns complete/incomplete/blocked/failed to main orchestrator
 
 **If conductor returns "incomplete"** (context budget reached), main spawns a NEW conductor that reads STATE.md/HANDOFF.md and continues from where the previous one left off. Max 3 conductor spawns.
 
@@ -77,8 +82,11 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 - `.shipit/STATE.md` — Current position and progress
 - `.shipit/PLAN.md` — Active plan with tasks
 - `.shipit/RESEARCH.md` — Pre-planning research (large tasks)
+- `.shipit/PROJECT_CONTEXT.md` — Shared codebase patterns (all agents read this)
+- `.shipit/LESSONS.md` — Review findings for future executors (learning loop)
 - `.shipit/HANDOFF.md` — Cumulative context from completed tasks
 - `.shipit/handoffs/task-N.md` — Per-task handoff files (parallel-safe, merged by conductor)
+- `.shipit/receipts/task-N.json` — Machine-verifiable proof of task execution
 - `.shipit/DEFERRED.md` — Out-of-scope issues found during execution
 - `.shipit/config.json` — Preferences (TDD, model profile, parallel execution)
 - `.shipit/loop.md` — Loop state (auto-managed)
@@ -103,3 +111,11 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 14. **Git checkpoints** — Executor tags HEAD before each task (`shipit/checkpoint-task-N`). Rollback with `/shipit:rollback`.
 15. **Model profiles** — quality/balanced/budget profiles optimize cost and speed across agents.
 16. **Research before planning** — Large tasks get a researcher agent before the planner to prevent bad assumptions.
+17. **Re-anchoring** — Every executor re-reads the original task description before implementing to prevent drift.
+18. **Receipt-based proof** — Every executor writes a machine-verifiable receipt (`.shipit/receipts/task-N.json`). No receipt = no progress.
+19. **Self-review before commit** — Every executor reviews its own `git diff` for debug code, unnecessary changes, and pattern violations.
+20. **Shared codebase context** — `PROJECT_CONTEXT.md` with real code examples ensures consistent style across all agents.
+21. **Learning loop** — Review findings propagate to future executors via `LESSONS.md`. Same mistake never happens twice.
+22. **Requirement discovery** — Vague tasks trigger Socratic questioning (2-4 focused questions) to surface hidden requirements before planning.
+23. **Epic-level verification** — Verifier checks ALL original requirements (not just plan tasks), with evidence for each.
+24. **Auto-CLAUDE.md** — If no coding style guide exists, generate one from codebase analysis so agents follow consistent patterns.

@@ -22,9 +22,30 @@ Before reviewing, load context:
 
 **Project instructions:** Read `./CLAUDE.md` if it exists. Verify code follows project conventions.
 **Task context:** Read `.shipit/PLAN.md` (find the specific task), `.shipit/HANDOFF.md` (what was done).
+**Codebase patterns:** Read `.shipit/PROJECT_CONTEXT.md` if it exists. Code MUST follow these patterns.
+**Previous lessons:** Read `.shipit/LESSONS.md` if it exists. Check that previous review findings are not repeated.
 </project_context>
 
 <process>
+
+## Stage 0: Receipt Verification
+
+**CRITICAL: Before reviewing code, verify the executor's receipt.**
+
+Read `.shipit/receipts/task-N.json` (where N is the task number). Check:
+
+| Check | Requirement |
+|-------|-------------|
+| `tests_run` | Must be `true` — executor ran tests |
+| `verify_result` | Must be `"pass"` — verify command succeeded |
+| `self_review` | Must be `true` — executor reviewed own diff |
+| `tdd_compliant` | Must be `true` if task had `TDD: yes` |
+| `checkpoint_tag` | Must exist — executor created git checkpoint |
+
+**If receipt is missing:** Report `BLOCKED — No receipt found. Executor may not have followed the process.`
+**If receipt fields are invalid:** Note in review but continue — the code review will catch actual issues.
+
+**GATE: Receipt read and validated (or missing receipt flagged).**
 
 ## Stage 1: Spec Compliance Review
 
@@ -68,10 +89,11 @@ Review the implementation for quality issues.
 |----------|---------------|
 | **Security** | Hardcoded secrets, unvalidated input, SQL injection, XSS, missing auth checks |
 | **Error Handling** | Missing try/catch, unhandled promise rejections, silent failures |
-| **Patterns** | Follows project conventions, consistent naming, proper imports |
+| **Patterns** | Follows PROJECT_CONTEXT.md conventions, consistent naming, proper imports |
 | **Testing** | Tests cover happy path + edge cases, assertions are meaningful |
 | **Performance** | N+1 queries, missing indexes, unnecessary loops, memory leaks |
 | **Cleanup** | No TODO/FIXME, no console.log, no commented-out code, no debug artifacts |
+| **Lessons Check** | No repetition of issues from LESSONS.md (previous review findings) |
 
 ### Severity Classification
 
@@ -119,6 +141,38 @@ Review the implementation for quality issues.
 
 </output_format>
 
+<lessons_extraction>
+
+## Stage 3: Extract Lessons (IMPORTANT or CRITICAL issues only)
+
+**After completing your review, if you found any IMPORTANT or CRITICAL issues, write a lesson entry.**
+
+Append to `.shipit/LESSONS.md`:
+
+```markdown
+## Task N: <issue category> — <timestamp>
+- **Issue:** <what was wrong>
+- **Severity:** CRITICAL | IMPORTANT
+- **Category:** security | error-handling | patterns | testing | performance | cleanup
+- **Lesson:** <what future executors should do to avoid this>
+- **Example:** <brief code snippet showing correct approach>
+```
+
+Create the file with this header if it doesn't exist:
+
+```markdown
+# ShipIt Lessons Learned
+
+> Findings from code reviews. ALL executors MUST read this before implementing.
+> Issues flagged here should NOT be repeated in future tasks.
+```
+
+**Skip this stage if:** Review result is APPROVED with no IMPORTANT or CRITICAL issues.
+
+**Purpose:** This creates a learning loop. Executor Task 3 reads lessons from Task 1 and Task 2 reviews, avoiding the same mistakes.
+
+</lessons_extraction>
+
 <review_loop>
 
 If the executor fixes issues and re-submits:
@@ -136,11 +190,16 @@ If the executor fixes issues and re-submits:
 <success_criteria>
 - [ ] All `<files_to_read>` files loaded before review
 - [ ] CLAUDE.md read if it exists
+- [ ] PROJECT_CONTEXT.md read (if exists) — patterns used as quality baseline
+- [ ] LESSONS.md read (if exists) — checked for repeated issues
+- [ ] Receipt verified (`.shipit/receipts/task-N.json`)
 - [ ] Task spec read from PLAN.md
 - [ ] All changed files read and reviewed
+- [ ] Stage 0 (receipt verification) completed
 - [ ] Stage 1 (spec compliance) completed with all 6 checks
-- [ ] Stage 2 (code quality) completed with all 6 categories
+- [ ] Stage 2 (code quality) completed with all 7 categories (including lessons check)
 - [ ] Issues classified by severity (CRITICAL/IMPORTANT/MINOR)
 - [ ] Report output in exact format
 - [ ] Specific fix instructions for every issue (not vague "fix this")
+- [ ] Stage 3 (lessons extraction) completed — LESSONS.md updated if issues found
 </success_criteria>

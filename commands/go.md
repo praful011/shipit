@@ -110,6 +110,21 @@ Your next action MUST be reviewing the user's prompt quality. Follow the prompt-
 
 **GATE: AskUserQuestion has been called AND the user has chosen a prompt. Do NOT proceed until you have the user's choice.**
 
+### Step 1.7: Requirement Discovery (Low Specificity Only)
+
+**If the Specificity score from Step 1.5 was < 60%**, the task may have hidden requirements. Before analyzing complexity, surface them:
+
+Follow the `requirement-discovery` skill (`skills/requirement-discovery/SKILL.md`):
+
+1. Parse the chosen prompt — identify explicit vs implicit requirements
+2. Identify decision points the user hasn't resolved (technology choices, behavior on edge cases, scope boundaries)
+3. Ask 2-4 focused questions using AskUserQuestion (concrete options, recommended defaults)
+4. Enrich the prompt with user's answers — this becomes the final `$ARGUMENTS` for all subsequent steps
+
+**Skip if:** Specificity score was >= 60%. The prompt is specific enough.
+
+**GATE: Prompt enriched with user's answers (or skipped for specific prompts).**
+
 ## Step 2: Analyze Task Complexity
 
 NOW you may examine the codebase. Use Glob and Grep to find relevant files. Read key files to understand the current state.
@@ -133,7 +148,9 @@ git checkout -b shipit/<task-slug>-$(date +%s)
 
 ## Step 3: Delegate to Conductor (Medium/Large)
 
-**This is where YOU hand off control.** Spawn the shipit-conductor agent with the full task context. The conductor will handle: planning, plan-checking, state initialization, wave-based execution, per-task review, and verification — all in a FRESH context window.
+**This is where YOU hand off control.** Spawn the shipit-conductor agent with the full task context. The conductor will handle: codebase context generation, auto-CLAUDE.md (if missing), requirement discovery (if needed), planning, plan-checking, state initialization, wave-based execution, per-task review, lessons extraction, and verification — all in a FRESH context window.
+
+**Include specificity score** in the conductor prompt so it knows whether to trigger requirement discovery.
 
 ```
 Task(
@@ -154,6 +171,7 @@ Codebase context from orchestrator analysis:
 - Key files identified: [list from Step 2]
 - Relevant patterns: [any patterns noticed in Step 2]
 - Branch: [current branch name]
+- Specificity score: [score from Step 1.5, e.g. 45% — conductor uses this to decide on requirement discovery]
 "
 )
 ```
@@ -269,9 +287,10 @@ CONTINUATION: Resume executing the task: $ARGUMENTS
 - [ ] Step 1: Context files loaded (PROJECT.md, STATE.md, config.json, CLAUDE.md)
 - [ ] Step 1.5: Prompt reviewed, AskUserQuestion called, user chose a prompt
 - [ ] Step 1.5: Prompt saved to `.shipit/prompts/history.md`
+- [ ] Step 1.7: Requirement discovery triggered if Specificity < 60% (or skipped)
 - [ ] Step 2: Complexity classified (quick/medium/large)
 - [ ] Step 2.5: Feature branch created (if medium/large)
-- [ ] Step 3: Conductor agent spawned with full context (if medium/large)
+- [ ] Step 3: Conductor agent spawned with full context + specificity score (if medium/large)
 - [ ] Step 3: Conductor result handled (complete/incomplete/blocked/failed)
 - [ ] Step 3: Continuation conductors spawned if needed (max 3)
 - [ ] Quick: TDD enforced for quick tasks (if applicable)

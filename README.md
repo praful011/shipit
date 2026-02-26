@@ -23,12 +23,20 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 
 - **Thin Orchestrator** — Main context stays lean (~15%). Heavy work happens in fresh-context agents.
 - **Prompt Review** — Scores your prompt quality, suggests an improved version, and lets you choose.
+- **Requirement Discovery** — Vague tasks trigger Socratic questioning (2-4 focused questions) before planning.
 - **Smart Routing** — Auto-detects task complexity (quick/medium/large) and routes accordingly.
+- **Shared Codebase Context** — `PROJECT_CONTEXT.md` with real code examples ensures consistent style across all agents.
+- **Auto-CLAUDE.md** — If no coding guide exists, generates one from codebase analysis.
 - **Research-First Planning** — Large tasks get a researcher agent before planning to prevent bad assumptions.
 - **Plan Validation** — Every plan is checked across 8 dimensions before execution. Bad plans get revised.
 - **TDD by Default** — Every code change goes through RED, GREEN, REFACTOR.
+- **Re-Anchoring** — Every executor re-reads the original task description to prevent scope drift.
+- **Self-Review** — Executors review their own `git diff` before committing (catches debug code, unnecessary changes).
 - **Wave-Based Parallel Execution** — Independent tasks run in parallel within waves.
-- **Per-Task Code Review** — Every task is reviewed for spec compliance + code quality immediately after execution.
+- **Receipt-Based Proof** — Every task produces a machine-verifiable receipt (JSON proof of tests, verify, self-review).
+- **Per-Task Code Review** — Every task is reviewed for spec compliance + code quality + pattern compliance.
+- **Learning Loop** — Review findings propagate to future executors via `LESSONS.md`. Same mistake never twice.
+- **Epic-Level Verification** — Verifier checks ALL original requirements with evidence, not just plan completion.
 - **Integration Checking** — Cross-task E2E verification after all tasks complete.
 - **Auto-Loop** — Keeps working autonomously until all tasks complete or a blocker is hit.
 - **Git Checkpoints** — Every task creates a checkpoint tag for safe rollback.
@@ -126,15 +134,17 @@ This will:
 
 That's it. ShipIt will:
 1. **Review** your prompt — score quality, suggest an improved version, let you choose
-2. **Analyze** complexity — classify as quick/medium/large
-3. **Branch** — create isolated feature branch (medium/large)
-4. **Research** — explore the codebase to understand patterns (large tasks)
-5. **Plan** — decompose into atomic tasks with wave assignments
-6. **Validate** — check the plan across 8 dimensions
-7. **Execute** — run each task with TDD in fresh context, parallel within waves
-8. **Review** — spec compliance + code quality after each task
-9. **Verify** — check the result matches original intent
-10. **Integration check** — verify cross-task E2E flows
+2. **Discover** hidden requirements — ask focused questions if your prompt is vague
+3. **Analyze** complexity — classify as quick/medium/large
+4. **Branch** — create isolated feature branch (medium/large)
+5. **Context** — generate shared codebase patterns doc (PROJECT_CONTEXT.md)
+6. **Research** — explore the codebase to understand patterns (large tasks)
+7. **Plan** — decompose into atomic tasks with wave assignments
+8. **Validate** — check the plan across 8 dimensions
+9. **Execute** — run each task with TDD, self-review, and receipt generation
+10. **Review** — spec + quality + pattern compliance after each task, lessons extracted
+11. **Verify** — epic-level requirement review (every original requirement, with evidence)
+12. **Integration check** — verify cross-task E2E flows
 
 ### Quick tasks (skip the overhead)
 
@@ -276,22 +286,28 @@ ShipIt persists all state in the `.shipit/` directory:
 
 ```
 .shipit/
-├── PROJECT.md         # What the project is about
-├── STATE.md           # Current progress and position
-├── PLAN.md            # Active plan with tasks and waves
-├── RESEARCH.md        # Pre-planning research (large tasks)
-├── HANDOFF.md         # Cumulative context from completed tasks
-├── DEFERRED.md        # Out-of-scope issues for later
-├── config.json        # Preferences and model profile
-├── loop.md            # Auto-loop state (managed automatically)
-├── handoffs/          # Per-task handoff files (parallel-safe)
+├── PROJECT.md           # What the project is about
+├── STATE.md             # Current progress and position
+├── PLAN.md              # Active plan with tasks and waves
+├── RESEARCH.md          # Pre-planning research (large tasks)
+├── PROJECT_CONTEXT.md   # Shared codebase patterns (all agents read)
+├── LESSONS.md           # Review findings for future executors
+├── HANDOFF.md           # Cumulative context from completed tasks
+├── DEFERRED.md          # Out-of-scope issues for later
+├── config.json          # Preferences and model profile
+├── loop.md              # Auto-loop state (managed automatically)
+├── handoffs/            # Per-task handoff files (parallel-safe)
 │   ├── task-1.md
 │   ├── task-2.md
 │   └── ...
+├── receipts/            # Machine-verifiable proof of execution
+│   ├── task-1.json
+│   ├── task-2.json
+│   └── ...
 ├── prompts/
-│   └── history.md     # Prompt review history log
+│   └── history.md       # Prompt review history log
 └── debug/
-    └── DEBUG.md       # Debugging session state
+    └── DEBUG.md         # Debugging session state
 ```
 
 | File | Purpose | Created by |
@@ -300,11 +316,14 @@ ShipIt persists all state in the `.shipit/` directory:
 | `STATE.md` | Status, current task number, timestamps | `/shipit:go` |
 | `PLAN.md` | Task list with Do/Verify, Waves, Dependencies | Planner agent |
 | `RESEARCH.md` | Codebase analysis and approach recommendations | Researcher agent |
+| `PROJECT_CONTEXT.md` | Real code examples and conventions for all agents | Conductor |
+| `LESSONS.md` | Review findings — future executors avoid past mistakes | Reviewer agent |
 | `HANDOFF.md` | Cumulative log of completed tasks with context | Conductor (merged) |
 | `DEFERRED.md` | Out-of-scope issues found during execution | Executor agent |
 | `config.json` | User preferences and model profile | `/shipit:init` |
 | `loop.md` | Loop iteration counter, active flag | Stop hook |
 | `handoffs/task-N.md` | Individual task handoff (parallel-safe) | Executor agent |
+| `receipts/task-N.json` | Machine-verifiable proof of task execution | Executor agent |
 | `prompts/history.md` | Prompt review log (original, improved, scores) | `/shipit:go`, `/shipit:plan` |
 | `debug/DEBUG.md` | Hypotheses, test results, root cause | Debugger agent |
 
@@ -320,50 +339,50 @@ ShipIt persists all state in the `.shipit/` directory:
 User: /shipit:go add user authentication
          │
          ▼
-┌─── THIN ORCHESTRATOR (~15% context) ────┐
-│                                          │
-│  1. Load context (.shipit/ files)        │
-│  2. Score & review prompt (AskUser)      │
-│  3. Analyze complexity → medium          │
-│  4. Create feature branch                │
-│  5. Spawn conductor ──────────────────┐  │
-│                                       │  │
-└───────────────────────────────────────┘  │
-                                           │
-┌─── CONDUCTOR (fresh 200k context) ───────┘
+┌─── THIN ORCHESTRATOR (~15% context) ─────────┐
+│                                                │
+│  1. Load context (.shipit/ files)              │
+│  2. Score & review prompt (AskUser)            │
+│  3. Requirement discovery (if vague prompt)    │
+│  4. Analyze complexity → medium                │
+│  5. Create feature branch                      │
+│  6. Spawn conductor ──────────────────────┐    │
+│                                           │    │
+└───────────────────────────────────────────┘    │
+                                                 │
+┌─── CONDUCTOR (fresh 200k context) ─────────────┘
 │
-│  6. [Large only] Spawn RESEARCHER
-│     └── Writes RESEARCH.md
+│  7. Generate PROJECT_CONTEXT.md (codebase patterns)
+│  8. Auto-generate CLAUDE.md (if missing)
+│  9. [Large only] Spawn RESEARCHER → RESEARCH.md
 │
-│  7. Spawn PLANNER
-│     └── Writes PLAN.md (3 tasks, 2 waves)
-│
-│  8. Spawn PLAN-CHECKER
-│     └── Validates 8 dimensions → PASS
-│
-│  9. Initialize STATE.md + HANDOFF.md
+│  10. Spawn PLANNER → PLAN.md (3 tasks, 2 waves)
+│  11. Spawn PLAN-CHECKER → Validates 8 dimensions → PASS
+│  12. Initialize STATE.md + HANDOFF.md
 │
 │  WAVE 1 (parallel):
-│  ├── Spawn EXECUTOR (Task 1) ──► checkpoint ──► TDD ──► commit
-│  └── Spawn EXECUTOR (Task 2) ──► checkpoint ──► TDD ──► commit
+│  ├── Spawn EXECUTOR (Task 1) ──► checkpoint ──► TDD ──► self-review ──► receipt ──► commit
+│  └── Spawn EXECUTOR (Task 2) ──► checkpoint ──► TDD ──► self-review ──► receipt ──► commit
 │  │
+│  ├── Verify receipts (task-1.json, task-2.json)
 │  ├── Merge handoffs into HANDOFF.md
-│  ├── Spawn REVIEWER (Task 1) → APPROVED
-│  └── Spawn REVIEWER (Task 2) → APPROVED
+│  ├── Spawn REVIEWER (Task 1) → APPROVED → extract lessons
+│  └── Spawn REVIEWER (Task 2) → APPROVED → extract lessons
 │
 │  WAVE 2 (sequential):
-│  └── Spawn EXECUTOR (Task 3) ──► checkpoint ──► TDD ──► commit
+│  └── Spawn EXECUTOR (Task 3) ──► reads LESSONS.md ──► checkpoint ──► TDD ──► receipt ──► commit
 │  │
+│  ├── Verify receipt (task-3.json)
 │  ├── Merge handoff
 │  └── Spawn REVIEWER (Task 3) → APPROVED
 │
-│  10. Spawn VERIFIER → PASS
-│  11. Spawn INTEGRATION-CHECKER → SHIP IT
-│  12. Return "complete"
+│  13. Spawn VERIFIER → epic-level requirement review → PASS
+│  14. Spawn INTEGRATION-CHECKER → SHIP IT
+│  15. Return "complete"
 │
-└──────────────────────────────────────────
+└──────────────────────────────────────────────────
 
-Orchestrator: ✅ <shipit-done/>
+Orchestrator: <shipit-done/>
 ```
 
 ### Task Handoff System
@@ -488,14 +507,56 @@ Every task is reviewed immediately after execution:
 
 **Severities:** CRITICAL (block), IMPORTANT (fix), MINOR (note)
 
+### Quality Assurance Pipeline
+
+ShipIt has a multi-layered quality assurance system that catches issues at every stage:
+
+```
+┌─ BEFORE PLANNING ──────────────────────────────────┐
+│  Prompt Review ──► Requirement Discovery            │
+│  PROJECT_CONTEXT.md ──► Auto-CLAUDE.md              │
+└─────────────────────────────────────────────────────┘
+         │
+┌─ DURING EXECUTION ─────────────────────────────────┐
+│  Re-anchor to original task                         │
+│  Read LESSONS.md (avoid past mistakes)              │
+│  Follow PROJECT_CONTEXT.md patterns                 │
+│  TDD: RED → GREEN → REFACTOR                        │
+│  Self-review own diff                               │
+│  Generate receipt (JSON proof)                      │
+│  Atomic commit                                      │
+└─────────────────────────────────────────────────────┘
+         │
+┌─ AFTER EXECUTION ──────────────────────────────────┐
+│  Receipt verification (tests ran? verify passed?)   │
+│  Code review: spec compliance + quality + patterns  │
+│  Extract lessons → LESSONS.md (learning loop)       │
+└─────────────────────────────────────────────────────┘
+         │
+┌─ AFTER ALL TASKS ──────────────────────────────────┐
+│  Epic-level requirement review (with evidence)      │
+│  Integration check (cross-task E2E flows)           │
+└─────────────────────────────────────────────────────┘
+```
+
+**Key quality files:**
+
+| File | Purpose | Who Writes | Who Reads |
+|------|---------|-----------|-----------|
+| `PROJECT_CONTEXT.md` | Codebase patterns with real code examples | Conductor | All agents |
+| `LESSONS.md` | Review findings to avoid in future tasks | Reviewer | Executor |
+| `receipts/task-N.json` | Machine-verifiable proof of execution | Executor | Conductor, Reviewer, Verifier |
+
 ### Skills
 
-ShipIt includes 7 reference skills that agents consult:
+ShipIt includes 9 reference skills that agents consult:
 
 | Skill | Purpose |
 |-------|---------|
 | `shipit-core` | Core architecture awareness (injected at session start) |
 | `prompt-review` | Prompt scoring criteria and improvement process |
+| `requirement-discovery` | Socratic questioning to surface hidden requirements |
+| `codebase-context` | Shared PROJECT_CONTEXT.md generation from real code examples |
 | `tdd` | RED-GREEN-REFACTOR cycle, hard gates, anti-rationalization |
 | `debugging-methodology` | Scientific debugging (Iron Law, phases, anti-patterns) |
 | `code-review` | Review guidelines, severity levels, evidence requirements |
@@ -512,12 +573,20 @@ How ShipIt compares to other Claude Code plugins:
 |---------|--------|-------------|-----|
 | Thin orchestrator | Fresh-context conductor | No | No |
 | Prompt quality review | Auto-score + improve | No | No |
+| Requirement discovery | Socratic questioning (2-4 Qs) | No | Phase discussion |
 | One-command execution | `/shipit:go` | Manual | Multi-step |
 | Task decomposition | Auto-detect complexity | Manual planning | Phase-based roadmap |
 | Plan validation | 8-dimension checker | No | No |
 | Research before planning | Researcher agent | No | Phase researcher |
+| Shared codebase context | PROJECT_CONTEXT.md (real code) | No | Codebase mapper |
+| Auto-CLAUDE.md | Generate if missing | No | No |
 | TDD enforcement | Built-in hard gate | Skill (optional) | No |
-| Per-task code review | 2-stage reviewer | No | No |
+| Re-anchoring / drift prevention | Every executor re-reads original | No | No |
+| Self-review before commit | Executor reviews own diff | No | No |
+| Receipt-based proof | JSON receipts per task | No | No |
+| Per-task code review | 3-stage (receipt + spec + quality) | No | No |
+| Learning loop (LESSONS.md) | Review findings → future executors | No | No |
+| Epic-level verification | Every requirement with evidence | No | Goal-backward verify |
 | Integration checking | E2E checker agent | No | Integration checker |
 | Wave-based parallel | Yes (within waves) | No | Yes (within phases) |
 | Auto-loop | Stop hook based | No | No |
@@ -527,7 +596,6 @@ How ShipIt compares to other Claude Code plugins:
 | Model profiles | quality/balanced/budget | No | quality/balanced/budget |
 | Multi-agent | 9 specialized agents | Subagent dispatch | 10+ agents |
 | Session persistence | `.shipit/` flat files | No | `.planning/` directory |
-| Context window display | Statusline with % bar | No | No |
 | Health check | `/shipit:health` | No | `/gsd:health` |
 | Quick mode | `/shipit:quick` | No | `/gsd:quick` |
 | Discussion mode | `/shipit:discuss` | No | No |
@@ -584,6 +652,8 @@ shipit/
 ├── skills/
 │   ├── shipit-core/          # Core architecture skill
 │   ├── prompt-review/        # Prompt quality review
+│   ├── requirement-discovery/ # Socratic requirement discovery
+│   ├── codebase-context/     # Shared PROJECT_CONTEXT.md generation
 │   ├── tdd/                  # TDD reference
 │   ├── debugging-methodology/ # Scientific debugging
 │   ├── code-review/          # Review guidelines
@@ -624,6 +694,14 @@ shipit/
 14. **Git checkpoints** — Tag before each task. Rollback anytime.
 15. **Model profiles** — Right model for each agent role.
 16. **Research before planning** — Explore before decomposing.
+17. **Re-anchoring** — Every executor re-reads the original task to prevent drift.
+18. **Receipt-based proof** — No receipt = no progress. Machine-verifiable execution evidence.
+19. **Self-review** — Executors check their own diff before committing.
+20. **Shared codebase context** — PROJECT_CONTEXT.md ensures consistent code style.
+21. **Learning loop** — Review findings → LESSONS.md → future executors avoid past mistakes.
+22. **Requirement discovery** — Vague prompts trigger focused questioning before planning.
+23. **Epic-level verification** — Check ALL original requirements, not just plan tasks.
+24. **Auto-CLAUDE.md** — Generate coding guide when none exists.
 
 ---
 

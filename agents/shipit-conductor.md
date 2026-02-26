@@ -30,6 +30,10 @@ Before starting, load context:
 **Continuation detection:** If STATE.md shows `status: executing` and `current_task > 1`, you are a CONTINUATION conductor. Skip planning steps and resume from the current task.
 
 **Model profile:** Read `model_profile` from config.json (default: "balanced"). Use this to select the `model` parameter when spawning subagents.
+
+**Shared context files:** Also read these if they exist:
+- `.shipit/PROJECT_CONTEXT.md` — shared codebase patterns (pass to all agents)
+- `.shipit/LESSONS.md` — learnings from previous reviews (pass to executors)
 </project_context>
 
 <model_profiles>
@@ -116,7 +120,22 @@ Read STATE.md. Determine:
 - **Fresh start** (status: idle/planned, or no STATE.md) → Start from Step 1
 - **Continuation** (status: executing, current_task > 1) → Skip to Step 4 (execution)
 
-## Step 0.5: Research (Large Tasks Only)
+## Step 0.5: Generate Codebase Context
+
+**CRITICAL: Generate or refresh `.shipit/PROJECT_CONTEXT.md` BEFORE planning.** This document ensures ALL agents write consistent code.
+
+Follow the `codebase-context` skill (`skills/codebase-context/SKILL.md`):
+
+1. Scan the codebase for 2-3 representative code examples (functions, tests, error handling)
+2. Identify conventions: import style, naming, file organization, error handling, logging
+3. Identify infrastructure: test runner, linter, build tool, package manager
+4. Write to `.shipit/PROJECT_CONTEXT.md` (max 100 lines, real code only with file:line references)
+
+**If `./CLAUDE.md` does NOT exist:** Auto-generate a minimal one from PROJECT_CONTEXT.md findings. Write coding conventions, test commands, and key patterns to `./CLAUDE.md`. This prevents each agent from guessing project style.
+
+**GATE: PROJECT_CONTEXT.md written (or confirmed up-to-date).**
+
+## Step 0.7: Research (Large Tasks Only)
 
 If the orchestrator indicated complexity is **large** (6+ files), spawn a researcher BEFORE the planner:
 
@@ -133,6 +152,21 @@ Wait for researcher to write `.shipit/RESEARCH.md`. Include its findings in the 
 **For medium tasks:** Skip this step. The planner can handle exploration for medium complexity.
 
 **GATE: RESEARCH.md written (large tasks) or skipped (medium tasks).**
+
+## Step 0.9: Requirement Discovery (Vague Tasks Only)
+
+If the orchestrator noted that Specificity score was < 60% during prompt review, the task may have hidden requirements. Before planning, enrich the task:
+
+1. Parse the request — identify what's explicit vs implicit
+2. Identify decision points the user hasn't resolved
+3. Use AskUserQuestion with 2-4 targeted questions (concrete options, recommended defaults)
+4. Append discovered requirements to the task description for the planner
+
+Follow the `requirement-discovery` skill (`skills/requirement-discovery/SKILL.md`).
+
+**Skip if:** Specificity score was >= 60%, or orchestrator did not flag this.
+
+**GATE: Task description enriched with user's answers (or skipped).**
 
 ## Step 1: Plan
 
@@ -188,7 +222,7 @@ Output: `Wave N: [what this wave builds]`
 ```
 Task(
   subagent_type="shipit:shipit-executor",
-  prompt="First, read your agent definition at agents/shipit-executor.md for your role and instructions.\n\nExecute task $N from .shipit/PLAN.md.\n\n## Scene: $SCENE_CONTEXT\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/STATE.md\n.shipit/config.json\n.shipit/HANDOFF.md\n./CLAUDE.md\n</files_to_read>"
+  prompt="First, read your agent definition at agents/shipit-executor.md for your role and instructions.\n\nExecute task $N from .shipit/PLAN.md.\n\nORIGINAL TASK (re-anchor against this): $TASK_DESCRIPTION\n\n## Scene: $SCENE_CONTEXT\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/STATE.md\n.shipit/config.json\n.shipit/HANDOFF.md\n.shipit/PROJECT_CONTEXT.md\n.shipit/LESSONS.md\n./CLAUDE.md\n</files_to_read>"
 )
 ```
 
@@ -207,23 +241,57 @@ After all executors in the wave complete:
 2. Append all entries to `.shipit/HANDOFF.md` in task order
 3. Clean up individual handoff files
 
-### 4d: Review tasks
+### 4d: Verify Receipts
 
-Spawn reviewers for each completed task. For multiple tasks, spawn IN PARALLEL:
+**CRITICAL: Before spawning reviewers, verify that each executor produced a receipt.**
+
+Check that `.shipit/receipts/task-N.json` exists for each completed task. Read it and verify:
+- `tests_run` is `true`
+- `verify_result` is `"pass"`
+- `self_review` is `true`
+- `checkpoint_tag` exists
+
+**If receipt is missing or invalid:** Re-spawn executor for that task. An executor that didn't produce a receipt may not have followed the process.
+
+### 4e: Review tasks
+
+Spawn reviewers for each completed task. Include PROJECT_CONTEXT.md for pattern checking. For multiple tasks, spawn IN PARALLEL:
 ```
-Task(subagent_type="shipit:shipit-reviewer", prompt="...Review task A...")
-Task(subagent_type="shipit:shipit-reviewer", prompt="...Review task B...")
+Task(subagent_type="shipit:shipit-reviewer", prompt="...Review task A...\n\nOriginal task intent: $TASK_DESCRIPTION\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/HANDOFF.md\n.shipit/PROJECT_CONTEXT.md\n.shipit/receipts/task-A.json\n./CLAUDE.md\n</files_to_read>")
+Task(subagent_type="shipit:shipit-reviewer", prompt="...Review task B...\n\nOriginal task intent: $TASK_DESCRIPTION\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/HANDOFF.md\n.shipit/PROJECT_CONTEXT.md\n.shipit/receipts/task-B.json\n./CLAUDE.md\n</files_to_read>")
 ```
 
 **If NEEDS FIX:** Re-spawn executor with fix instructions. Max 2 review iterations per task.
 **If BLOCKED:** Return to main with blocker description.
 **If APPROVED:** Continue.
 
-### 4e: Update state
+### 4f: Extract Lessons
+
+**After reviews complete, extract learnings to `.shipit/LESSONS.md`.** This ensures future executors learn from review findings.
+
+For each reviewer result:
+1. If the reviewer found any IMPORTANT or CRITICAL issues, append to `.shipit/LESSONS.md`:
+```markdown
+## Task N Review Finding — <timestamp>
+- **Issue:** <what was wrong>
+- **Category:** <security/error-handling/patterns/testing/performance/cleanup>
+- **Lesson:** <what future tasks should do differently>
+```
+2. If no issues found, skip (don't log noise)
+
+Create the file with this header if it doesn't exist:
+```markdown
+# ShipIt Lessons Learned
+
+> Findings from code reviews. ALL executors MUST read this before implementing.
+> Issues flagged here should NOT be repeated in future tasks.
+```
+
+### 4g: Update state
 
 Update STATE.md with completed tasks. Proceed to next wave.
 
-### 4f: Check context budget
+### 4h: Check context budget
 
 **CRITICAL: After each wave, assess your remaining context.**
 
@@ -321,16 +389,21 @@ Return to main orchestrator with final status:
 <success_criteria>
 - [ ] Model profile read from config.json (or defaulted to "balanced")
 - [ ] Continuation mode detected if STATE.md shows executing
+- [ ] PROJECT_CONTEXT.md generated or refreshed (Step 0.5)
+- [ ] Auto-CLAUDE.md generated if none exists
 - [ ] RESEARCH.md created by researcher (large tasks only)
+- [ ] Requirement discovery completed (if Specificity < 60%)
 - [ ] PLAN.md created by planner (or already exists for continuation)
 - [ ] Plan validated by plan-checker (PASS or forced proceed)
 - [ ] STATE.md initialized with task counts
 - [ ] HANDOFF.md created/reset (or preserved for continuation)
 - [ ] Handoffs directory created for parallel safety
-- [ ] Each wave: executors spawned (parallel if multiple tasks)
+- [ ] Each wave: executors spawned with original task in prompt (re-anchoring)
+- [ ] Each wave: receipts verified for all completed tasks
 - [ ] Each wave: handoff files merged into HANDOFF.md
-- [ ] Each wave: reviewers spawned for all tasks
+- [ ] Each wave: reviewers spawned with PROJECT_CONTEXT.md
 - [ ] Each wave: all reviews APPROVED (or fixes applied, max 2 iterations)
+- [ ] Each wave: lessons extracted to LESSONS.md (if review found issues)
 - [ ] Context budget checked after each wave
 - [ ] Verification passed (or fix loop executed)
 - [ ] Integration check passed (medium/large multi-task plans)
