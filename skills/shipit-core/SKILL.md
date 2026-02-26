@@ -5,7 +5,7 @@ description: Core ShipIt plugin awareness - injected at session start
 
 # ShipIt
 
-ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, and smart task decomposition into 10 commands.
+ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, smart task decomposition, and prompt quality review into 10 commands.
 
 ## Commands
 
@@ -25,11 +25,12 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 ## How It Works
 
 1. **`/shipit:go`** is the main command. Use it for 90% of work.
-2. It auto-detects task complexity (quick/medium/large) and routes accordingly.
-3. For medium/large tasks, it spawns a planner agent to break work into atomic steps.
-4. Each step is executed with TDD (test first, then implement, then verify).
-5. An auto-loop keeps Claude working until all tasks complete or a blocker is hit.
-6. State persists in `.shipit/` so you can resume across sessions.
+2. It first reviews your prompt quality, suggests an improved version, and lets you choose.
+3. It auto-detects task complexity (quick/medium/large) and routes accordingly.
+4. For medium/large tasks, it spawns a planner agent to break work into atomic steps.
+5. Each step is executed with TDD (test first, then implement, then verify).
+6. An auto-loop keeps Claude working until all tasks complete or a blocker is hit.
+7. State persists in `.shipit/` so you can resume across sessions.
 
 ## Auto-Loop Signals
 
@@ -44,6 +45,7 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 - `.shipit/HANDOFF.md` — Cumulative context from completed tasks
 - `.shipit/config.json` — Preferences
 - `.shipit/loop.md` — Loop state (auto-managed)
+- `.shipit/prompts/history.md` — Prompt review history log
 
 ## Principles
 
