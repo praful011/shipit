@@ -21,6 +21,7 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 
 ### Why ShipIt?
 
+- **✍️ Prompt Review** — Scores your prompt quality, suggests an improved version, and lets you choose
 - **🧠 Smart Routing** — Auto-detects task complexity (quick/medium/large) and plans accordingly
 - **🧪 TDD by Default** — Every code change goes through RED → GREEN → REFACTOR
 - **🔁 Auto-Loop** — Keeps working autonomously until all tasks complete or a blocker is hit
@@ -120,12 +121,13 @@ This will:
 ```
 
 That's it. ShipIt will:
-1. **Analyze** your codebase to understand the context
-2. **Plan** the work into atomic tasks
-3. **Execute** each task with TDD in a fresh context (test first, then implement)
-4. **Handoff** context between tasks via HANDOFF.md
-5. **Loop** autonomously until everything's done
-6. **Verify** the result matches the original intent
+1. **Review** your prompt — score quality, suggest an improved version, let you choose
+2. **Analyze** your codebase to understand the context
+3. **Plan** the work into atomic tasks
+4. **Execute** each task with TDD in a fresh context (test first, then implement)
+5. **Handoff** context between tasks via HANDOFF.md
+6. **Loop** autonomously until everything's done
+7. **Verify** the result matches the original intent
 
 ### More examples
 
@@ -171,13 +173,15 @@ Chat about architecture, approaches, or ideas — ShipIt reads your codebase to 
 
 ### `/shipit:go <task>`
 
-**The main command.** Auto-detects task complexity, plans, executes with TDD, and loops until done.
+**The main command.** Reviews your prompt, auto-detects task complexity, plans, executes with TDD, and loops until done.
 
 ```
 /shipit:go add user authentication with JWT tokens
 /shipit:go fix the cart total not updating on item removal
 /shipit:go refactor the API layer to use async/await
 ```
+
+**Prompt Review** — Before execution, ShipIt scores your prompt quality (e.g., 35%), generates an improved version (e.g., 88%), and lets you choose which to proceed with. The chosen prompt is saved to `.shipit/prompts/history.md`.
 
 | Complexity | Files | What happens |
 |------------|-------|-------------|
@@ -189,7 +193,7 @@ Chat about architecture, approaches, or ideas — ShipIt reads your codebase to 
 
 ### `/shipit:plan <description>`
 
-Creates a detailed plan and presents it for your approval before executing.
+Creates a detailed plan and presents it for your approval before executing. Also reviews your prompt quality first.
 
 ```
 /shipit:plan redesign the database schema for multi-tenancy
@@ -358,6 +362,8 @@ ShipIt persists all state in the `.shipit/` directory:
 ├── HANDOFF.md      # Cumulative context from completed tasks
 ├── config.json     # Preferences
 ├── loop.md         # Auto-loop state (managed automatically)
+├── prompts/
+│   └── history.md  # Prompt review history log
 └── debug/
     └── DEBUG.md    # Debugging session state
 ```
@@ -370,6 +376,7 @@ ShipIt persists all state in the `.shipit/` directory:
 | `HANDOFF.md` | Cumulative log of completed tasks with context | Executor agent |
 | `config.json` | User preferences | `/shipit:init` |
 | `loop.md` | Loop iteration counter, active flag | Stop hook |
+| `prompts/history.md` | Prompt review log (original, improved, scores, choice) | `/shipit:go`, `/shipit:plan` |
 | `debug/DEBUG.md` | Hypotheses, test results, root cause | Debugger agent |
 
 > **Tip:** Add `.shipit/` to your `.gitignore` — it's session state, not source code.
@@ -384,7 +391,8 @@ When you run `/shipit:go <task>`, here's what happens:
 
 ```mermaid
 flowchart TD
-    A["👤 User: /shipit:go add auth"] --> B{"Analyze Complexity"}
+    A["👤 User: /shipit:go add auth"] --> PR["✍️ Prompt Review\nScore → Improve → Choose"]
+    PR --> B{"Analyze Complexity"}
     B -->|Quick: 1 file| C["Execute Directly with TDD"]
     B -->|Medium: 2-5 files| D["🤖 Planner Agent"]
     B -->|Large: 6+ files| D
@@ -411,6 +419,7 @@ flowchart TD
 
     C --> L
 
+    style PR fill:#f3e5f5,stroke:#7b1fa2
     style A fill:#e1f5fe
     style Q fill:#c8e6c9
     style D fill:#fff3e0
@@ -611,6 +620,7 @@ How ShipIt compares to other Claude Code plugins:
 
 | Feature | ShipIt | [Superpowers](https://github.com/obra/superpowers) | [GSD](https://github.com/get-shit-done) | [Ralph Loop](https://github.com/anthropics/claude-plugins-official) |
 |---------|--------|-------------|-----|------------|
+| Prompt quality review | Auto-score + improve | No | No | No |
 | One-command execution | `/shipit:go` | Manual | Multi-step | Manual |
 | Smart task decomposition | Auto-detect complexity | Manual planning | Phase-based roadmap | N/A |
 | TDD enforcement | Built-in hard gate | Skill (optional) | No | No |
@@ -659,6 +669,7 @@ shipit/
 │   └── statusline.js      # Custom status line
 ├── skills/
 │   ├── shipit-core/       # Core awareness skill
+│   ├── prompt-review/     # Prompt quality review skill
 │   └── tdd/               # TDD reference skill
 ├── scripts/
 │   └── setup-loop.sh      # Loop initialization
