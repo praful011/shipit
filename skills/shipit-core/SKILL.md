@@ -22,15 +22,17 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 | `/shipit:update` | Update ShipIt to latest version from remote |
 | `/shipit:help` | Show usage guide |
 
-## How It Works
+## CRITICAL: How ShipIt Works
 
-1. **`/shipit:go`** is the main command. Use it for 90% of work.
-2. It first reviews your prompt quality, suggests an improved version, and lets you choose.
-3. It auto-detects task complexity (quick/medium/large) and routes accordingly.
-4. For medium/large tasks, it spawns a planner agent to break work into atomic steps.
-5. Each step is executed with TDD (test first, then implement, then verify).
-6. An auto-loop keeps Claude working until all tasks complete or a blocker is hit.
-7. State persists in `.shipit/` so you can resume across sessions.
+**When `/shipit:go` or `/shipit:plan` is invoked, you MUST follow the defined step sequence. This is NON-NEGOTIABLE.**
+
+1. **Load context** — Read `.shipit/` state files and `CLAUDE.md`
+2. **Prompt review (MANDATORY)** — Score the prompt, generate improved version, present to user via AskUserQuestion. **You MUST call AskUserQuestion BEFORE exploring the codebase.**
+3. **Analyze complexity** — Only AFTER prompt review, explore codebase and classify as quick/medium/large
+4. **Plan** — For medium/large tasks, spawn shipit-planner agent to write PLAN.md
+5. **Execute** — Spawn shipit-executor agents with TDD enforcement
+6. **Verify** — Spawn shipit-verifier to validate completed work
+7. **Loop** — Auto-loop keeps going until all tasks complete or a blocker is hit
 
 ## Auto-Loop Signals
 
@@ -49,7 +51,8 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 
 ## Principles
 
-1. **TDD by default** — Write the failing test first, always
-2. **Atomic commits** — One commit per completed task
+1. **TDD by default** — Write the failing test first, always. NO production code without a failing test.
+2. **Atomic commits** — One commit per completed task. Stage files individually (NEVER `git add .`).
 3. **Maximum autonomy** — Keep going until done or blocked
 4. **Flat state** — No deep hierarchies, just the files you need
+5. **Step gates** — Each step MUST complete before the next begins. NEVER skip steps.
