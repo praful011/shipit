@@ -5,13 +5,13 @@ description: Core ShipIt plugin awareness - injected at session start
 
 # ShipIt
 
-ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, smart task decomposition, prompt quality review, plan validation, per-task code review, model profiles, checkpoint/rollback, and rationalization prevention into 13 commands.
+ShipIt is your unified development plugin. It combines auto-loop execution, TDD enforcement, persistent state, smart task decomposition, prompt quality review, confidence-aware execution, adaptive model selection, progressive autonomy, code health tracking, and 13 commands into one seamless workflow.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/shipit:go <task>` | Smart router — auto-detects complexity, plans, validates, executes, reviews, loops until done |
+| `/shipit:go <task>` | Smart router — auto-detects complexity, plans, executes with confidence scoring, loops until done |
 | `/shipit:quick <task>` | Fast execution — skip optional agents, just TDD and commit (1-2 files only) |
 | `/shipit:plan <desc>` | Quick brainstorm + plan — review before executing |
 | `/shipit:init [name]` | Lightweight project setup — creates .shipit/ with PROJECT.md and config.json |
@@ -34,47 +34,46 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 The main conversation is a **thin orchestrator** that handles only the first steps, then delegates everything to a fresh-context **conductor agent**:
 
 **Main orchestrator (~15% context):**
-1. **Load context** — Read `.shipit/` state files, `CLAUDE.md`, and run mandatory discovery protocol
-2. **Prompt review (MANDATORY)** — Score the prompt, generate improved version, present to user via AskUserQuestion. **You MUST call AskUserQuestion BEFORE exploring the codebase.**
-3. **Analyze complexity** — Only AFTER prompt review, explore codebase and classify as quick/medium/large
-4. **Branch isolation** — For medium/large tasks, create isolated feature branch
-5. **Delegate to conductor** — Spawn shipit-conductor with task context and model profile
+1. **Load context** — Read `.shipit/` state files, `CLAUDE.md`, analytics.json
+2. **Prompt review (MANDATORY)** — Score the prompt, generate improved version, present to user via AskUserQuestion
+3. **Requirement discovery** — If Specificity < 60%, ask 2-4 focused questions
+4. **Analyze complexity** — Explore codebase, classify as quick/medium/large
+5. **Branch isolation** — For medium/large tasks, create isolated feature branch
+6. **Delegate to conductor** — Spawn shipit-conductor with task context
 
 **Conductor agent (fresh 200k context):**
-6. **Generate codebase context** — Write `.shipit/PROJECT_CONTEXT.md` with real code examples and conventions
-7. **Auto-CLAUDE.md** — If no `CLAUDE.md` exists, generate one from codebase analysis
-8. **Requirement discovery** — If Specificity < 60%, ask 2-4 focused questions to surface hidden requirements
-9. **Research** — For large tasks: spawn shipit-researcher to explore before planning
-10. **Plan** — Spawn shipit-planner to write PLAN.md (2-5 tasks max)
-11. **Validate plan** — Spawn shipit-plan-checker (8 dimensions, max 2 revision iterations)
-12. **Execute waves** — Spawn shipit-executor agents (parallel within waves, sequential across waves)
-13. **Verify receipts** — Check `.shipit/receipts/task-N.json` for proof of execution
-14. **Review each task** — Spawn shipit-reviewer after each executor (spec + quality + pattern compliance)
-15. **Extract lessons** — Write review findings to `.shipit/LESSONS.md` for future executors
-16. **Verify** — Spawn shipit-verifier for epic-level requirement review (not just plan completion)
-17. **Integration check** — Spawn shipit-integration-checker for cross-task E2E verification
-18. **Return status** — Returns complete/incomplete/blocked/failed to main orchestrator
+7. **Load analytics** — Read trust score, failure patterns, cost history
+8. **Generate codebase context** — Write PROJECT_CONTEXT.md with real code examples
+9. **Auto-CLAUDE.md** — Generate coding guide if none exists
+10. **Research** — For large tasks: spawn researcher before planning
+11. **Plan** — Spawn planner (with self-validation, dependency-aware waves)
+12. **Execute waves** — Spawn executors with confidence scoring, adaptive model selection
+13. **Verify receipts** — Check JSON proof-of-work for each task
+14. **Review + extract lessons** — Reviewer checks spec + quality + patterns, writes LESSONS.md
+15. **Handle replans** — If executor signals approach failure, re-plan remaining tasks
+16. **Verify** — Epic-level requirement review + integration check (merged verifier)
+17. **Track health** — Calculate code health delta, update analytics
+18. **Return status** — complete/incomplete/blocked/failed
 
-**If conductor returns "incomplete"** (context budget reached), main spawns a NEW conductor that reads STATE.md/HANDOFF.md and continues from where the previous one left off. Max 3 conductor spawns.
+**If conductor returns "incomplete"** (context budget reached), main spawns a NEW conductor. Max 3 conductor spawns.
 
 ## Agents
 
 | Agent | Purpose | Default Model (balanced) |
 |-------|---------|------------------------|
-| **shipit-conductor** | Orchestrates plan-to-completion in fresh context | sonnet |
+| **shipit-conductor** | Orchestrates plan-to-completion with autonomy management | sonnet |
 | **shipit-researcher** | Researches how to implement before planning (large tasks) | sonnet |
-| **shipit-planner** | Breaks tasks into atomic steps with Wave assignments | sonnet |
-| **shipit-plan-checker** | Validates plans across 8 dimensions before execution | haiku |
-| **shipit-executor** | Executes one task with TDD, creates checkpoints, commits atomically | sonnet |
-| **shipit-reviewer** | Reviews each task: spec compliance + code quality | haiku |
-| **shipit-verifier** | Validates all completed work against original intent | sonnet |
-| **shipit-integration-checker** | Cross-task E2E verification | haiku |
+| **shipit-planner** | Breaks tasks into atomic steps with self-validation + wave assignment | sonnet |
+| **shipit-executor** | Executes one task with TDD, confidence scoring, checkpoints | sonnet (adaptive) |
+| **shipit-reviewer** | Reviews: receipt + spec + quality + patterns, extracts lessons | haiku |
+| **shipit-verifier** | Epic-level requirements + integration check (merged) | sonnet |
 | **shipit-debugger** | Scientific method debugging with persistent state | sonnet |
 
 ## Auto-Loop Signals
 
-- `<shipit-done/>` — Output this when all work is complete to exit the loop
-- `<shipit-blocked>description</shipit-blocked>` — Output this when you need user input
+- `<shipit-done/>` — All work complete, exit loop
+- `<shipit-blocked>description</shipit-blocked>` — Need user input
+- `<shipit-replan>reason</shipit-replan>` — Planned approach failed, need to replan remaining tasks
 
 ## State Files
 
@@ -85,37 +84,42 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 - `.shipit/PROJECT_CONTEXT.md` — Shared codebase patterns (all agents read this)
 - `.shipit/LESSONS.md` — Review findings for future executors (learning loop)
 - `.shipit/HANDOFF.md` — Cumulative context from completed tasks
-- `.shipit/handoffs/task-N.md` — Per-task handoff files (parallel-safe, merged by conductor)
-- `.shipit/receipts/task-N.json` — Machine-verifiable proof of task execution
+- `.shipit/handoffs/task-N.md` — Per-task handoff files (parallel-safe)
+- `.shipit/receipts/task-N.json` — Machine-verifiable proof of execution (with confidence)
+- `.shipit/analytics.json` — Persistent analytics (trust score, cost, health trend)
 - `.shipit/DEFERRED.md` — Out-of-scope issues found during execution
-- `.shipit/config.json` — Preferences (TDD, model profile, parallel execution)
+- `.shipit/config.json` — Preferences (TDD, autonomy mode, model profile, MCP hooks)
 - `.shipit/loop.md` — Loop state (auto-managed)
 - `.shipit/prompts/history.md` — Prompt review history log
 - `.shipit/debug/DEBUG.md` — Debugging session state
 
 ## Principles
 
-1. **TDD by default** — Write the failing test first, always. NO production code without a failing test.
-2. **Atomic commits** — One commit per completed task. Stage files individually (NEVER `git add .`).
-3. **Maximum autonomy** — Keep going until done or blocked.
-4. **Flat state** — No deep hierarchies, just the files you need.
-5. **Step gates** — Each step MUST complete before the next begins. NEVER skip steps.
-6. **Plan validation** — Every plan is checked by plan-checker before execution. Bad plans get revised.
-7. **Per-task review** — Every task is reviewed after execution. Issues caught early, not at the end.
-8. **Scope boundaries** — Out-of-scope issues go to DEFERRED.md, not inline fixes. Max 3 auto-fix attempts.
-9. **Rationalization prevention** — Explicit anti-rationalization tables in every agent. "This thought means STOP."
-10. **Context budgets** — Max 5 tasks per plan. Each agent gets fresh 200k context. Keep plans lean.
-11. **Thin orchestrator** — Main context stays under 20%. Conductor handles planning through verification in fresh context.
-12. **Wave-based parallel execution** — Tasks grouped by Wave field. Same-wave tasks run in parallel, waves execute sequentially.
-13. **Parallel-safe handoffs** — Executors write to `.shipit/handoffs/task-N.md`. Conductor merges into HANDOFF.md after each wave.
-14. **Git checkpoints** — Executor tags HEAD before each task (`shipit/checkpoint-task-N`). Rollback with `/shipit:rollback`.
-15. **Model profiles** — quality/balanced/budget profiles optimize cost and speed across agents.
-16. **Research before planning** — Large tasks get a researcher agent before the planner to prevent bad assumptions.
-17. **Re-anchoring** — Every executor re-reads the original task description before implementing to prevent drift.
-18. **Receipt-based proof** — Every executor writes a machine-verifiable receipt (`.shipit/receipts/task-N.json`). No receipt = no progress.
-19. **Self-review before commit** — Every executor reviews its own `git diff` for debug code, unnecessary changes, and pattern violations.
-20. **Shared codebase context** — `PROJECT_CONTEXT.md` with real code examples ensures consistent style across all agents.
-21. **Learning loop** — Review findings propagate to future executors via `LESSONS.md`. Same mistake never happens twice.
-22. **Requirement discovery** — Vague tasks trigger Socratic questioning (2-4 focused questions) to surface hidden requirements before planning.
-23. **Epic-level verification** — Verifier checks ALL original requirements (not just plan tasks), with evidence for each.
-24. **Auto-CLAUDE.md** — If no coding style guide exists, generate one from codebase analysis so agents follow consistent patterns.
+1. **TDD by default** — Write the failing test first, always.
+2. **Atomic commits** — One commit per task. Stage files individually.
+3. **Supervised autonomy** — Three modes (guided/supervised/autonomous) based on trust score.
+4. **Confidence-aware execution** — Executor self-rates confidence. LOW = stop and ask human.
+5. **Step gates** — Each step MUST complete before the next begins.
+6. **Self-validating plans** — Planner checks 8 dimensions + dependency-aware wave safety.
+7. **Per-task review** — Every task reviewed. Lessons extracted to LESSONS.md.
+8. **Scope boundaries** — Out-of-scope issues go to DEFERRED.md. Max 3 auto-fix attempts.
+9. **Context budgets** — Max 5 tasks per plan. Fresh context per agent.
+10. **Thin orchestrator** — Main context stays under 20%.
+11. **Wave-based parallel** — Same-wave tasks run simultaneously.
+12. **Parallel-safe handoffs** — Individual files, merged after waves.
+13. **Git checkpoints** — Tag before each task. Rollback anytime.
+14. **Adaptive model selection** — Dynamic per-task model choice based on complexity.
+15. **Re-anchoring** — Every executor re-reads original task to prevent drift.
+16. **Receipt-based proof** — JSON receipts with confidence, tests, verify result.
+17. **Self-review** — Executors check own diff before committing.
+18. **Shared codebase context** — PROJECT_CONTEXT.md ensures consistent code style.
+19. **Learning loop** — LESSONS.md propagates review findings to future executors.
+20. **Adaptive re-planning** — When approach fails, replan remaining tasks (not redo completed).
+21. **Epic-level verification** — Check ALL original requirements with evidence.
+22. **Progressive autonomy** — Trust score builds over sessions. Earn more autonomy.
+23. **Code health tracking** — Track if codebase gets better or worse per task.
+24. **Failure analytics** — Persistent learning from failures across sessions.
+25. **Cost awareness** — Track token cost per task, respect budget limits.
+26. **MCP integration hooks** — Optional blast radius (Engram), dependency graph (Depwire), docs (Context7).
+27. **Requirement discovery** — Vague tasks trigger Socratic questioning before planning.
+28. **Auto-CLAUDE.md** — Generate coding guide when none exists.

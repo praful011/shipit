@@ -78,6 +78,28 @@ This tags the current HEAD so the codebase can be restored to its pre-task state
 
 **GATE: Checkpoint tag created.**
 
+## Step 3.7: Confidence Assessment
+
+**CRITICAL: Before writing any code, honestly assess your confidence in implementing this task.**
+
+Rate yourself:
+
+| Level | Score | Criteria | Action |
+|-------|-------|----------|--------|
+| **HIGH** | 80-100% | Clear requirements, familiar patterns, straightforward implementation | Execute normally |
+| **MEDIUM** | 50-79% | Some ambiguity, unfamiliar APIs, multiple valid approaches | Execute but flag `"confidence": "medium"` in receipt — triggers stricter review |
+| **LOW** | 0-49% | Unclear requirements, unfamiliar domain, risky changes, uncertain side effects | **STOP.** Output `<shipit-blocked>Low confidence on task N: <reason></shipit-blocked>` |
+
+**How to assess:**
+- Do I understand EXACTLY what this task needs? (If guessing → lower confidence)
+- Have I seen this pattern before in this codebase? (If new → lower confidence)
+- Could this break existing functionality? (If yes → lower confidence)
+- Are there multiple valid approaches and I'm unsure which? (If yes → lower confidence)
+
+**Record confidence in receipt.** The conductor and reviewer use this to calibrate review depth.
+
+**GATE: Confidence assessed. If LOW → stopped and signaled blocker. If HIGH/MEDIUM → proceed.**
+
 ## Step 4: Execute
 
 **If task has TDD: yes AND config.tdd is true:**
@@ -102,6 +124,8 @@ c. **REFACTOR** — Clean up if needed. Run tests again. Still passing.
 a. Make the change as specified in the **Do** field
 b. Run the verification command from the **Verify** field
 c. Confirm it works
+
+**Incremental testing:** During development (RED/GREEN cycles), run ONLY the tests related to changed files. This is faster for large test suites. The full suite runs at verification (verifier agent).
 
 **GATE: Verify command MUST have been run and MUST show success.**
 
@@ -169,6 +193,7 @@ mkdir -p .shipit/receipts
 {
   "task": N,
   "timestamp": "<ISO timestamp>",
+  "confidence": "high|medium|low",
   "commit": "<short commit hash from git log -1 --format=%h>",
   "tests_run": true,
   "test_output_summary": "<e.g., 12 passed, 0 failed>",
@@ -249,6 +274,11 @@ Trigger: Fix requires significant structural modification (new DB table, switchi
 Action: STOP → output `<shipit-blocked>description of architectural decision needed</shipit-blocked>`
 **User decision required.**
 
+**RULE 5: REPLAN when approach doesn't work**
+Trigger: The planned approach is fundamentally wrong (API doesn't support what was planned, library incompatible, assumption was incorrect)
+Action: STOP → output `<shipit-replan>Task N: planned approach failed because [reason]. Remaining tasks need replanning.</shipit-replan>`
+**Conductor will re-spawn planner for remaining tasks only.**
+
 **RULE PRIORITY:**
 1. Rule 4 applies → STOP (architectural decision)
 2. Rules 1-3 apply → Fix automatically
@@ -267,22 +297,11 @@ No user permission needed for Rules 1-3. Track all deviations in HANDOFF.md entr
 
 <rationalization_prevention>
 
-**CRITICAL: If you catch yourself thinking any of these, STOP. You are about to violate the ShipIt process.**
+**STOP RULE:** If your next thought starts with "just", "skip", "too simple", "I already", "while I'm here", or "I'll do it later" — that thought is a process violation. Stop. Follow the current step. No exceptions.
 
-| Thought | Reality | Action |
-|---------|---------|--------|
-| "This is too simple to need TDD" | That is rationalization. Simple code has simple tests. Write the test. | STOP → Write the test first |
-| "I'll write the test after the code" | TDD means test FIRST. "After" means never. | STOP → Delete code, start with test |
-| "Just this once I'll skip it" | "Just this once" always means "every time." | STOP → Follow the process |
-| "The test would be trivial anyway" | Trivial tests catch trivial regressions. Write it. | STOP → Write the test |
-| "I already know this works" | You don't know until the test proves it. | STOP → Write the test |
-| "Let me fix this unrelated issue I found" | That's scope creep. Log it to DEFERRED.md. | STOP → Log to DEFERRED.md |
-| "This pre-existing bug is easy to fix" | Not your task. Log it. | STOP → Log to DEFERRED.md |
-| "I'll just clean up this code while I'm here" | Not your task. Focus. | STOP → Only change what the task requires |
-| "I don't need to read HANDOFF.md, I already know the context" | You don't. Read it. Previous tasks may have changed things. | STOP → Read HANDOFF.md |
-| "git add . is faster" | And also stages secrets, build artifacts, and unrelated changes. | STOP → Stage files individually |
-
-**The rule:** If a thought starts with "just", "already", "too simple", "I'll do it later", or "while I'm here" — that thought is a violation. Stop and follow the process.
+**Scope rule:** Unrelated issues go to DEFERRED.md. Not your task = not your fix.
+**TDD rule:** Test FIRST. No code before a failing test. No exceptions for "simple" code.
+**Staging rule:** Stage files individually. Never `git add .` or `git add -A`.
 
 </rationalization_prevention>
 

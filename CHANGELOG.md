@@ -2,6 +2,60 @@
 
 All notable changes to ShipIt are documented in this file.
 
+## [3.0.0] - 2026-02-27
+
+### Intelligence & Awareness (NEW — no other plugin has these)
+- **Confidence-aware execution** — Executor self-rates confidence (HIGH/MEDIUM/LOW) before implementing. LOW = stop and ask human. MEDIUM = stricter review. Confidence recorded in receipt.
+- **Adaptive model selection** — Dynamic per-task model choice based on complexity. Simple fix → haiku. Complex auth → opus. Overrides static profiles.
+- **Progressive autonomy / trust score** — Persistent trust score in `analytics.json`. Builds over sessions (+5 per success, -10 per failure). Affects autonomy mode.
+- **Supervised autonomy modes** — Three modes: guided (confirm all), supervised (pause per wave), autonomous (full autopilot). Trust score can auto-adjust mode.
+- **Code health tracking** — Tracks if codebase gets better or worse per task. Health trend in analytics.json.
+- **Failure analytics** — Persistent `analytics.json` tracks: total runs, success rate, common failures, avg review iterations, cost history.
+- **Cost tracking** — Estimate token cost per agent spawn. Accumulate per run. Respect `cost_budget` config.
+
+### Quality Pipeline (NEW)
+- **Shared codebase context** — `PROJECT_CONTEXT.md` generated before planning with real code examples. All agents read it.
+- **Auto-CLAUDE.md** — If no CLAUDE.md exists, generate one from codebase analysis for consistent agent behavior.
+- **Requirement discovery** — When prompt Specificity < 60%, trigger Socratic questioning (2-4 focused questions) before planning.
+- **Re-anchoring / drift prevention** — Every executor re-reads original task from PLAN.md frontmatter before implementing.
+- **Self-review before commit** — Executor reviews own `git diff` for debug code, TODOs, unnecessary changes.
+- **Receipt-based proof** — `.shipit/receipts/task-N.json` with confidence, tests_run, verify_result, self_review. Machine-verifiable.
+- **Learning loop** — Reviewer extracts IMPORTANT/CRITICAL findings to `LESSONS.md`. Future executors read and avoid past mistakes.
+- **Epic-level verification** — Verifier parses EVERY requirement from original task, verifies each with evidence (file:line or test name).
+
+### Architecture Changes
+- **Adaptive re-planning** — When executor signals `<shipit-replan>`, conductor re-plans remaining tasks (keeps completed work).
+- **Self-validating plans** — Planner checks 8 dimensions internally. Plan-checker agent merged into planner.
+- **Merged verifier** — Integration-checker merged into verifier. One agent does epic-level requirements + cross-task integration.
+- **Agents reduced 9 → 7** — Plan-checker merged into planner, integration-checker merged into verifier. Faster, cheaper.
+- **Dependency-aware wave safety** — Planner analyzes import graph before wave assignment. Shared dependencies = different waves.
+- **Incremental testing** — Executor runs only affected tests during RED/GREEN. Full suite at verification.
+- **MCP integration hooks** — Optional: Engram (blast radius), Depwire (dependency graph), Context7 (API docs).
+- **Trimmed rationalization tables** — 20-line tables → 3-line rules per agent. Saves ~100 lines of agent context.
+
+### New Skills
+- **requirement-discovery** — Socratic requirement discovery (2-4 focused questions, concrete options)
+- **codebase-context** — PROJECT_CONTEXT.md generation from real code examples
+
+### New Config Options
+- `autonomy_mode` — "guided" / "supervised" / "autonomous"
+- `adaptive_models` — Dynamic per-task model selection
+- `mcp_integrations` — Optional MCP server hooks
+- `cost_budget` — Max cost per run in dollars
+
+### New State Files
+- `.shipit/PROJECT_CONTEXT.md` — Shared codebase patterns for all agents
+- `.shipit/LESSONS.md` — Review findings for future executors
+- `.shipit/receipts/task-N.json` — Machine-verifiable proof of execution
+- `.shipit/analytics.json` — Persistent analytics (trust, cost, health)
+
+### Breaking Changes
+- Plan-checker agent removed (merged into planner self-validation)
+- Integration-checker agent removed (merged into verifier)
+- Receipt file now required — conductor verifies receipts before reviews
+- Confidence field added to receipt format
+- Config schema expanded with 4 new fields
+
 ## [2.0.0] - 2026-02-26
 
 ### Architecture

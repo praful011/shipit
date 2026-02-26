@@ -60,7 +60,11 @@ Create `.shipit/config.json` with defaults:
   "parallel_execution": true,
   "max_parallel_agents": 3,
   "model_profile": "balanced",
-  "model_overrides": {}
+  "model_overrides": {},
+  "autonomy_mode": "supervised",
+  "adaptive_models": true,
+  "mcp_integrations": {},
+  "cost_budget": null
 }
 ```
 
@@ -74,8 +78,12 @@ Create `.shipit/config.json` with defaults:
 | `auto_commit` | boolean | `true` | Commit after each completed task |
 | `parallel_execution` | boolean | `true` | Allow parallel agent execution within waves |
 | `max_parallel_agents` | number (1-5) | `3` | Maximum concurrent agents per wave |
-| `model_profile` | string | `"balanced"` | Agent model selection: "quality", "balanced", or "budget" |
+| `model_profile` | string | `"balanced"` | Base agent model selection: "quality", "balanced", or "budget" |
 | `model_overrides` | object | `{}` | Override specific agent models (e.g., `{"executor": "opus"}`) |
+| `autonomy_mode` | string | `"supervised"` | Oversight level: "guided" (confirm all), "supervised" (pause per wave), "autonomous" (full autopilot) |
+| `adaptive_models` | boolean | `true` | Dynamically select model per task based on complexity (overrides profile for individual tasks) |
+| `mcp_integrations` | object | `{}` | Optional MCP servers: `{"blast_radius": "engram", "dependency_graph": "depwire", "docs": "context7"}` |
+| `cost_budget` | number\|null | `null` | Max cost in dollars per `/shipit:go` run. null = unlimited |
 
 ## Step 6: Confirm
 

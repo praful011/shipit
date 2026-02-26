@@ -100,7 +100,30 @@ Check that `.shipit/receipts/task-N.json` exists for ALL tasks. Verify:
 - All receipts show `tests_run: true` and `verify_result: "pass"`
 - Checkpoint tags exist for all tasks
 
-## Step 6: Report
+## Step 6: Integration Check (Multi-Task Plans Only)
+
+**For plans with 2+ tasks that touch different files, verify cross-task integration.**
+
+Skip this step for single-task plans.
+
+### 6A: Map Task Boundaries
+From PLAN.md and HANDOFF.md, identify:
+- Tasks that modified shared interfaces (APIs, types, configs)
+- Tasks that depend on output from other tasks
+- Files modified by multiple tasks (potential conflicts)
+
+### 6B: Check Integration Points
+For each boundary:
+- **Interface compatibility:** Do exported functions/types match what consumers expect?
+- **Data flow:** Does data flow correctly between components?
+- **Imports:** All imports resolving? No circular dependencies introduced?
+
+### 6C: Test E2E Flows
+Run integration/E2E tests if they exist. If not, manually trace the primary user workflow through all changed components.
+
+**GATE: Integration points verified (or single-task plan — skipped).**
+
+## Step 7: Report
 
 **CRITICAL: You MUST output this exact report format:**
 
@@ -134,6 +157,11 @@ Check that `.shipit/receipts/task-N.json` exists for ALL tasks. Verify:
 - Missing requirements: [none / list of gaps]
 - Implementation drift: [none / list of deviations from plan]
 
+### Integration (multi-task plans only)
+| # | Boundary | Tasks | Status | Details |
+|---|----------|-------|--------|---------|
+| 1 | <interface/API> | Task A ↔ Task B | PASS/FAIL | <details> |
+
 ### Issues (if any)
 1. <issue description>
 2. <issue description>
@@ -159,6 +187,7 @@ If FAIL: The orchestrator will create fix tasks and loop back to execution
 - [ ] All task receipts verified
 - [ ] All checkpoint tags confirmed
 - [ ] Epic-level requirement review in report (not just plan task completion)
+- [ ] Integration check for multi-task plans (boundaries, data flow, imports)
 - [ ] Verification report output in exact format
 - [ ] Clear PASS or FAIL determination with evidence
 </success_criteria>

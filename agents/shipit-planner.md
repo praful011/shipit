@@ -30,6 +30,8 @@ Before planning, discover project context:
 
 **ShipIt state:** Read `.shipit/PROJECT.md`, `.shipit/STATE.md`, `.shipit/config.json` if they exist. These contain project context and preferences.
 
+**Codebase patterns:** Read `.shipit/PROJECT_CONTEXT.md` if it exists. Plan tasks that follow these established patterns.
+
 **Mandatory discovery protocol:**
 1. Read `./CLAUDE.md` — project instructions, conventions, constraints
 2. Check for `.agents/skills/` directory — if it exists, read SKILL.md files for project-specific patterns
@@ -119,7 +121,30 @@ complexity: quick|medium|large
 - **Waves execute sequentially** (Wave 1 must complete before Wave 2 starts)
 - Tasks in the same wave MUST NOT modify the same files (no conflicts)
 
-## Step 5: Update STATE.md
+## Step 5: Self-Validate Plan (8 Dimensions)
+
+**CRITICAL: Before writing the final plan, validate it yourself. This catches bad plans BEFORE execution.**
+
+Check ALL 8 dimensions. If any FAIL, fix the plan and re-check.
+
+| # | Dimension | Check |
+|---|-----------|-------|
+| 1 | **Task Coverage** | Does the plan cover ALL aspects of the original task? Missing implicit requirements? |
+| 2 | **Task Completeness** | Every task has Files, Do, TDD, Verify, Wave, Depends? |
+| 3 | **Dependency Ordering** | No circular deps? Earlier tasks don't depend on later ones? |
+| 4 | **Scope Sanity** | 2-5 tasks? Each completable in one atomic commit? No task touches >4 files? |
+| 5 | **Specificity** | Every Do field is imperative with exact paths? Every Verify is an exact command? |
+| 6 | **TDD Correctness** | Code tasks have TDD:yes? Config/docs have TDD:no? |
+| 7 | **Risk Assessment** | Destructive operations identified? Backup-before-destroy ordering? |
+| 8 | **Context Budget** | Total plan <2000 words? Each task description <500 words? |
+
+**Dependency-Aware Wave Safety:** Before assigning waves, analyze the actual import/dependency graph of the files being modified. Two tasks that share a dependency chain (file A imports file B, and both are being modified) MUST NOT be in the same wave.
+
+If any dimension fails, fix the plan inline. Do NOT output a broken plan.
+
+**GATE: All 8 dimensions pass. Plan is ready.**
+
+## Step 6: Update STATE.md
 
 Update `.shipit/STATE.md`:
 - Set `status: planned`
@@ -157,22 +182,16 @@ Update `.shipit/STATE.md`:
 
 <rationalization_prevention>
 
-**CRITICAL: If you catch yourself thinking any of these, STOP.**
+**STOP RULE:** If your next thought starts with "the executor will figure it out", "this is obvious", or "I don't need to explore" — that thought is a process violation. Plans are prompts. If the executor has to guess, the plan is bad.
 
-| Thought | Reality | Action |
-|---------|---------|--------|
-| "This needs 8 tasks" | No. Max 5. Split into 2 plans if needed. | STOP → Split the plan |
-| "The Do field needs a full paragraph" | Max 200 words. Be specific, not verbose. | STOP → Trim to essentials |
-| "I'll keep the Verify field vague" | Vague verification = unverifiable task. Exact command required. | STOP → Write the exact command |
-| "This file path is obvious" | Nothing is obvious to a fresh executor agent. Write exact paths. | STOP → Write the full path |
-| "The executor will figure it out" | If the executor has to figure anything out, the plan is bad. | STOP → Be more specific |
-| "I don't need to explore the codebase" | You do. Always. Existing patterns determine how to plan. | STOP → Explore first |
+**Specificity rule:** Every Do field must be imperative with exact paths. Every Verify field must be an exact command.
+**Budget rule:** Max 5 tasks. If you need more, split into 2 sequential plans.
 
 </rationalization_prevention>
 
 <success_criteria>
 - [ ] All `<files_to_read>` files loaded before any other action
-- [ ] CLAUDE.md read if it exists
+- [ ] CLAUDE.md and PROJECT_CONTEXT.md read if they exist
 - [ ] Codebase explored (relevant files found and read)
 - [ ] Complexity classified
 - [ ] `.shipit/PLAN.md` written with correct frontmatter and task format
@@ -180,5 +199,7 @@ Update `.shipit/STATE.md`:
 - [ ] Every **Do** field is specific and imperative (not vague)
 - [ ] Every **Verify** field has an exact command
 - [ ] Tasks ordered by dependency
+- [ ] Dependency-aware wave safety: no shared imports in same wave
+- [ ] Self-validation: all 8 dimensions checked and passed
 - [ ] `.shipit/STATE.md` updated with plan metadata
 </success_criteria>

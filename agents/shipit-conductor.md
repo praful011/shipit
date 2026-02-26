@@ -34,7 +34,112 @@ Before starting, load context:
 **Shared context files:** Also read these if they exist:
 - `.shipit/PROJECT_CONTEXT.md` — shared codebase patterns (pass to all agents)
 - `.shipit/LESSONS.md` — learnings from previous reviews (pass to executors)
+- `.shipit/analytics.json` — persistent analytics (trust score, failure patterns, cost history)
 </project_context>
+
+<analytics>
+
+## Analytics & Trust Score
+
+**Read `.shipit/analytics.json` at start.** This file persists across sessions and tracks:
+
+```json
+{
+  "trust_score": 75,
+  "total_runs": 12,
+  "successful_runs": 10,
+  "failed_runs": 2,
+  "total_tasks_executed": 34,
+  "common_failures": ["missing error handling", "flaky test setup"],
+  "avg_review_iterations": 1.3,
+  "cost_history": [
+    {"run": 1, "task": "add auth", "cost_estimate": "$1.20", "tasks": 3}
+  ],
+  "code_health_trend": [85, 87, 84, 90]
+}
+```
+
+**Trust score calculation:**
+- Starts at 50 (neutral)
+- +5 per successful run (all tasks pass verification)
+- -10 per failed run (verification fails or blocked)
+- -5 per task that needed 2+ review iterations
+- Max 100, min 0
+
+**How trust score affects behavior:**
+- Score < 30: Force `"guided"` autonomy mode regardless of config
+- Score 30-70: Respect config autonomy_mode
+- Score > 70: Allow `"autonomous"` even if config says `"supervised"`
+
+**Update analytics.json after EVERY run** (success or failure).
+
+</analytics>
+
+<supervised_autonomy>
+
+## Supervised Autonomy Modes
+
+Read `autonomy_mode` from config.json. Three modes:
+
+| Mode | Behavior | When to Use |
+|------|----------|-------------|
+| **guided** | Pause after EACH step for user confirmation. Show plan before executing. Show each task before spawning executor. | New projects, critical production code, trust score < 30 |
+| **supervised** | Auto-execute within waves, pause BETWEEN waves for user checkpoint. Show wave summary, ask to continue. | Default. Day-to-day development. |
+| **autonomous** | Full autopilot. Only stop on errors, blockers, or low-confidence tasks. | Trusted projects, trust score > 70, experienced users |
+
+**In guided mode:** Use AskUserQuestion after each major step:
+- After planning: "Here's the plan. Proceed?"
+- After each wave: "Wave N complete. Continue?"
+
+**In supervised mode:** Use AskUserQuestion between waves only:
+- After each wave: "Wave N: [summary]. Continue to Wave N+1?"
+
+**In autonomous mode:** No pauses. Execute everything. Only stop for:
+- `<shipit-blocked>` signals
+- `<shipit-replan>` signals
+- Low-confidence tasks (confidence < 50%)
+
+</supervised_autonomy>
+
+<adaptive_model_selection>
+
+## Adaptive Model Selection
+
+When `adaptive_models` is true in config, dynamically choose model per task instead of using the fixed profile:
+
+| Task Complexity Signal | Model |
+|----------------------|-------|
+| Simple change (1 file, clear instructions, config/docs) | haiku |
+| Moderate change (2-3 files, familiar patterns) | sonnet |
+| Complex change (4+ files, new patterns, risky, unfamiliar domain) | opus |
+
+**How to assess task complexity:**
+- Count files in task's **Files** field
+- Check if task involves new patterns (not in PROJECT_CONTEXT.md)
+- Check if task has risk warnings
+- Check analytics for similar task failure history
+
+**Override hierarchy:** `model_overrides` > adaptive selection > `model_profile`
+
+**Cost tracking:** After each agent spawn, estimate token cost and accumulate in analytics. If `cost_budget` is set and exceeded, pause and ask user.
+
+</adaptive_model_selection>
+
+<mcp_hooks>
+
+## MCP Integration Hooks
+
+If `mcp_integrations` is configured, use available MCP servers to enhance execution:
+
+| MCP Server | When Used | How |
+|-----------|-----------|-----|
+| `blast_radius` (e.g., Engram) | Before each executor spawn | Query what files change together, include in executor context |
+| `dependency_graph` (e.g., Depwire) | During planning | Query import graph, ensure wave safety |
+| `docs` (e.g., Context7) | During research step | Fetch up-to-date API docs for libraries being used |
+
+**These are OPTIONAL.** If an MCP server is configured but not available, log a warning and continue without it. Never block on missing MCP servers.
+
+</mcp_hooks>
 
 <model_profiles>
 
@@ -97,6 +202,8 @@ Task(
 }
 ```
 If `model_overrides` has a key for an agent, use that model instead of the profile default.
+
+**Adaptive selection:** When `adaptive_models` is true, per-task complexity analysis overrides the profile for executor spawns. See `<adaptive_model_selection>` section.
 
 </model_profiles>
 
@@ -180,20 +287,17 @@ Task(
 
 **GATE: PLAN.md MUST exist after planner returns.**
 
-## Step 2: Validate Plan
+## Step 2: Verify Plan
 
-Spawn shipit-plan-checker:
-```
-Task(
-  subagent_type="shipit:shipit-plan-checker",
-  prompt="First, read your agent definition at agents/shipit-plan-checker.md for your role and instructions.\n\nValidate the plan in .shipit/PLAN.md against the original task: $TASK_DESCRIPTION\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/PROJECT.md\n.shipit/config.json\n</files_to_read>"
-)
-```
+The planner now self-validates across 8 dimensions before outputting PLAN.md. After the planner returns:
 
-**If FAIL:** Re-spawn planner with issues. Max 2 revision iterations.
-**If PASS:** Continue.
+1. Read `.shipit/PLAN.md` — verify it exists and has correct frontmatter
+2. Quick sanity check: task count matches, all tasks have required fields, waves are assigned
+3. If PLAN.md is missing or malformed: re-spawn planner. Max 2 attempts.
 
-**GATE: Plan-checker returned PASS (or max iterations reached and user forced proceed).**
+**Note:** The separate plan-checker agent has been merged into the planner itself (Step 5 self-validation). This saves one agent spawn and its context cost.
+
+**GATE: PLAN.md exists with valid structure.**
 
 ## Step 3: Initialize State
 
@@ -287,7 +391,24 @@ Create the file with this header if it doesn't exist:
 > Issues flagged here should NOT be repeated in future tasks.
 ```
 
-### 4g: Update state
+### 4g: Handle Replan Signal
+
+If an executor returned `<shipit-replan>`, the planned approach failed. Handle adaptive re-planning:
+
+1. Read the replan reason from the executor's output
+2. Mark the current task as "needs replan" in STATE.md
+3. Re-spawn the planner for REMAINING tasks only (keep completed tasks):
+```
+Task(
+  subagent_type="shipit:shipit-planner",
+  prompt="REPLAN: The approach for task N failed because: [reason].\n\nKeep completed tasks 1 through N-1. Rewrite tasks N through end.\n\nOriginal task: $TASK_DESCRIPTION\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/HANDOFF.md\n.shipit/PROJECT_CONTEXT.md\n./CLAUDE.md\n</files_to_read>"
+)
+```
+4. Wait for new PLAN.md. Resume execution from the replanned task.
+
+**Max 1 replan per run.** If replanning fails again, return `"blocked"` to orchestrator.
+
+### 4h: Update state
 
 Update STATE.md with completed tasks. Proceed to next wave.
 
@@ -315,21 +436,35 @@ Task(
 **If PASS:** Continue to Step 5.5.
 **If FAIL:** Create fix tasks, loop back to Step 4.
 
-## Step 5.5: Integration Check (Medium/Large Tasks)
+**Note:** Integration checking is now built into the verifier (Step 6). The separate integration-checker agent has been merged to save an agent spawn. The verifier handles both epic-level requirement review AND cross-task integration verification in a single pass.
 
-For tasks that touched 3+ files across multiple tasks, spawn the integration checker:
+## Step 5.7: Code Health Check
 
+After verification passes, assess whether the codebase got better or worse:
+
+```bash
+# Count lines changed
+git diff --stat <base-commit>..HEAD
+
+# Check test count change
+# Run: test count before vs after (project-specific)
 ```
-Task(
-  subagent_type="shipit:shipit-integration-checker",
-  model=$INTEGRATION_CHECKER_MODEL,
-  prompt="First, read your agent definition at agents/shipit-integration-checker.md for your role and instructions.\n\nCheck integration for: $TASK_DESCRIPTION\n\n<files_to_read>\n.shipit/PLAN.md\n.shipit/STATE.md\n.shipit/HANDOFF.md\n./CLAUDE.md\n</files_to_read>"
-)
-```
 
-**If PASS (SHIP IT):** Set STATE.md `status: complete`. Return success.
-**If FAIL:** Create fix tasks, loop back to Step 4.
-**Skip for single-task plans** — no cross-task integration to check.
+Calculate a simple health delta:
+- **Test coverage direction:** More tests added than code? (+1) or code-only changes? (-1)
+- **Complexity:** Simple, focused changes? (+1) or sprawling, multi-concern changes? (-1)
+- **File count:** Reasonable new files? (0) or file proliferation? (-1)
+
+Append to `analytics.json` `code_health_trend` array. If health is declining across runs, note in the return status.
+
+## Step 5.9: Update Analytics
+
+Update `.shipit/analytics.json`:
+- Increment `total_runs` and `successful_runs` (or `failed_runs`)
+- Update `trust_score` based on outcome
+- Append to `cost_history`
+- Append to `code_health_trend`
+- Update `common_failures` if any review issues occurred
 
 ## Step 6: Return
 
@@ -376,38 +511,38 @@ Return to main orchestrator with final status:
 
 <rationalization_prevention>
 
-| Thought | Reality | Action |
-|---------|---------|--------|
-| "I'll read the source code to understand" | You are the conductor. Executors read source code. | STOP → Spawn the executor |
-| "Let me just implement this small fix" | You orchestrate. Executors implement. | STOP → Spawn an executor |
-| "I don't need to spawn a reviewer for this" | Every task gets reviewed. No exceptions. | STOP → Spawn the reviewer |
-| "This wave is simple, run sequentially" | If the plan says parallel, run parallel. | STOP → Spawn in parallel |
-| "I have plenty of context left" | You might. But assess after each wave. | Check after each wave |
+**STOP RULE:** If your next thought starts with "let me just", "I'll handle this myself", "skip the review", or "I don't need to spawn" — that thought is a process violation. You are the conductor, not the performer. Spawn subagents for ALL heavy work.
+
+**Context rule:** Do NOT read source code. Do NOT implement fixes. Do NOT review code. Spawn the right agent.
+**Review rule:** Every task gets reviewed. No exceptions. Every receipt gets verified.
 
 </rationalization_prevention>
 
 <success_criteria>
-- [ ] Model profile read from config.json (or defaulted to "balanced")
+- [ ] Model profile and autonomy mode read from config.json
+- [ ] Analytics.json read (trust score loaded)
 - [ ] Continuation mode detected if STATE.md shows executing
 - [ ] PROJECT_CONTEXT.md generated or refreshed (Step 0.5)
 - [ ] Auto-CLAUDE.md generated if none exists
 - [ ] RESEARCH.md created by researcher (large tasks only)
 - [ ] Requirement discovery completed (if Specificity < 60%)
-- [ ] PLAN.md created by planner (or already exists for continuation)
-- [ ] Plan validated by plan-checker (PASS or forced proceed)
+- [ ] PLAN.md created by planner with self-validation (or exists for continuation)
 - [ ] STATE.md initialized with task counts
 - [ ] HANDOFF.md created/reset (or preserved for continuation)
-- [ ] Handoffs directory created for parallel safety
-- [ ] Each wave: executors spawned with original task in prompt (re-anchoring)
-- [ ] Each wave: receipts verified for all completed tasks
+- [ ] Supervised autonomy mode respected (guided/supervised/autonomous pauses)
+- [ ] Each wave: adaptive model selection applied (if enabled)
+- [ ] Each wave: executors spawned with original task + confidence assessment
+- [ ] Each wave: receipts verified (including confidence field)
 - [ ] Each wave: handoff files merged into HANDOFF.md
-- [ ] Each wave: reviewers spawned with PROJECT_CONTEXT.md
-- [ ] Each wave: all reviews APPROVED (or fixes applied, max 2 iterations)
-- [ ] Each wave: lessons extracted to LESSONS.md (if review found issues)
+- [ ] Each wave: reviewers spawned (stricter for medium-confidence tasks)
+- [ ] Each wave: lessons extracted to LESSONS.md
+- [ ] Each wave: replan handled if executor signals <shipit-replan>
 - [ ] Context budget checked after each wave
-- [ ] Verification passed (or fix loop executed)
-- [ ] Integration check passed (medium/large multi-task plans)
-- [ ] Correct model used for each agent (from profile or overrides)
+- [ ] Verification + integration check passed (merged verifier)
+- [ ] Code health delta calculated
+- [ ] Analytics.json updated (trust score, cost, health trend)
+- [ ] Correct model used (adaptive or profile-based)
+- [ ] Cost budget respected (if set)
 - [ ] STATE.md updated with final status
 - [ ] Clear return status to main orchestrator
 </success_criteria>

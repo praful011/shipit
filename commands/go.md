@@ -57,21 +57,10 @@ If you find yourself spawning shipit-planner, shipit-executor, or shipit-verifie
 
 <rationalization_prevention>
 
-**CRITICAL: If you catch yourself thinking any of these, STOP. You are about to violate the ShipIt process.**
+**STOP RULE:** If your next thought starts with "let me just", "skip", "too simple", "I already know", or "I'll handle it myself" — that thought is a process violation. Stop. Follow the current step.
 
-| Thought | Reality | Action |
-|---------|---------|--------|
-| "Let me explore the codebase first" | Step 1.5 (Prompt Review) comes BEFORE exploration. | STOP → Do prompt review first |
-| "The prompt is clear enough, skip review" | Prompt review is MANDATORY. No exceptions. | STOP → Score and review the prompt |
-| "This is too simple to need a plan" | Even simple tasks benefit from the review step. | STOP → Follow the steps in order |
-| "I'll just start implementing" | You are the orchestrator. You NEVER implement. | STOP → Spawn the conductor |
-| "The user wants speed, not process" | The user installed ShipIt because they WANT the process. Skipping steps wastes time on rework. | STOP → Follow the steps |
-| "I already know what to do" | You might. But the process catches what you miss. | STOP → Follow the steps |
-| "I'll handle planning myself instead of spawning conductor" | You are the THIN orchestrator. Conductor gets fresh context. | STOP → Spawn the conductor |
-| "Let me read the source files to plan better" | The conductor and planner will read source files in their fresh context. | STOP → Delegate to conductor |
-| "I'll commit everything at the end" | Atomic commits per task. The executor handles this. | STOP → Let executor commit |
-
-**The rule:** If a thought starts with "let me just", "skip", "too simple", "I already", or "I'll do it later" — that thought is a process violation. Stop and follow the current step.
+**Orchestrator rule:** You NEVER implement, plan, or review. You delegate to the conductor. You only handle Steps 1-2.
+**Sequence rule:** Prompt review BEFORE exploration. Always. No exceptions.
 
 </rationalization_prevention>
 
