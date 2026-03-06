@@ -28,15 +28,17 @@ ShipIt is a **Claude Code plugin** that turns a single sentence into shipped cod
 - **Supervised Autonomy** — Three modes (guided/supervised/autonomous) control oversight level.
 
 **Quality Pipeline:**
+- **Mandatory Design Gate** — Non-trivial tasks require design approval before planning. 2-3 approaches proposed, user chooses, decision saved to `DESIGN.md`.
 - **TDD by Default** — Every code change goes through RED, GREEN, REFACTOR.
 - **Self-Validating Plans** — Planner checks 8 dimensions internally, dependency-aware wave safety.
 - **Re-Anchoring** — Every executor re-reads the original task to prevent scope drift.
 - **Self-Review** — Executors review their own `git diff` before committing.
-- **Receipt-Based Proof** — JSON receipts prove tests ran, verify passed, self-review done.
+- **Evidence-Based Receipts** — JSON receipts require raw test/verify output, not summaries. Receipts without evidence are rejected.
 - **Per-Task Code Review** — Spec compliance + quality + pattern compliance after each task.
 - **Learning Loop** — Review findings propagate via `LESSONS.md`. Same mistake never twice.
 - **Epic-Level Verification** — Verifier checks ALL original requirements with evidence + cross-task integration.
 - **Code Health Tracking** — Tracks if codebase gets better or worse with each task.
+- **Deep Rationalization Prevention** — Superpowers-style "Red Flags" tables in executor, planner, and conductor catch 41 specific excuses for skipping process steps.
 
 **Architecture:**
 - **Thin Orchestrator** — Main context stays lean (~15%). Heavy work in fresh-context agents.
@@ -145,16 +147,17 @@ This will:
 That's it. ShipIt will:
 1. **Review** your prompt — score quality, suggest an improved version, let you choose
 2. **Discover** hidden requirements — ask focused questions if your prompt is vague
-3. **Analyze** complexity — classify as quick/medium/large
-4. **Branch** — create isolated feature branch (medium/large)
-5. **Context** — generate shared codebase patterns doc (PROJECT_CONTEXT.md)
-6. **Research** — explore the codebase to understand patterns (large tasks)
-7. **Plan** — decompose into atomic tasks with wave assignments
-8. **Validate** — check the plan across 8 dimensions
-9. **Execute** — run each task with TDD, self-review, and receipt generation
-10. **Review** — spec + quality + pattern compliance after each task, lessons extracted
-11. **Verify** — epic-level requirement review (every original requirement, with evidence)
-12. **Integration check** — verify cross-task E2E flows
+3. **Design** — propose 2-3 approaches with trade-offs, get your approval, save decision to `DESIGN.md`
+4. **Analyze** complexity — classify as quick/medium/large
+5. **Branch** — create isolated feature branch (medium/large)
+6. **Context** — generate shared codebase patterns doc (PROJECT_CONTEXT.md)
+7. **Research** — explore the codebase to understand patterns (large tasks)
+8. **Plan** — decompose into atomic tasks with wave assignments
+9. **Validate** — check the plan across 8 dimensions
+10. **Execute** — run each task with TDD, self-review, and evidence-based receipt generation
+11. **Review** — spec + quality + pattern compliance after each task, lessons extracted
+12. **Verify** — epic-level requirement review (every original requirement, with evidence)
+13. **Integration check** — verify cross-task E2E flows
 
 ### Quick tasks (skip the overhead)
 
@@ -363,6 +366,7 @@ ShipIt persists all state in the `.shipit/` directory:
 ```
 .shipit/
 ├── PROJECT.md           # What the project is about
+├── DESIGN.md            # Design decision and chosen approach
 ├── STATE.md             # Current progress and position
 ├── PLAN.md              # Active plan with tasks and waves
 ├── RESEARCH.md          # Pre-planning research (large tasks)
@@ -390,6 +394,7 @@ ShipIt persists all state in the `.shipit/` directory:
 | File | Purpose | Created by |
 |------|---------|------------|
 | `PROJECT.md` | Project description, tech stack, constraints | `/shipit:init` |
+| `DESIGN.md` | Design decision — approaches considered, chosen approach, rationale | `/shipit:go` (Step 1.8) |
 | `STATE.md` | Status, current task number, timestamps | `/shipit:go` |
 | `PLAN.md` | Task list with Do/Verify, Waves, Dependencies | Planner agent |
 | `RESEARCH.md` | Codebase analysis and approach recommendations | Researcher agent |
@@ -422,27 +427,31 @@ User: /shipit:go add user authentication
 │  1. Load context + analytics.json (trust score)     │
 │  2. Score & review prompt (AskUser)                 │
 │  3. Requirement discovery (if vague prompt)         │
-│  4. Analyze complexity → medium                     │
-│  5. Create feature branch                           │
-│  6. Spawn conductor ─────────────────────────┐      │
+│  4. Design exploration (non-trivial tasks):         │
+│     ├── Propose 2-3 approaches with trade-offs      │
+│     ├── Get user approval (AskUser)                 │
+│     └── Save decision to .shipit/DESIGN.md          │
+│  5. Analyze complexity → medium                     │
+│  6. Create feature branch                           │
+│  7. Spawn conductor (+ design approach) ─────┐      │
 │                                              │      │
 └──────────────────────────────────────────────┘      │
                                                       │
 ┌─── CONDUCTOR (fresh 200k context) ──────────────────┘
 │
-│  7. Load analytics (trust score, failure patterns)
-│  8. Generate PROJECT_CONTEXT.md (codebase patterns)
-│  9. Auto-generate CLAUDE.md (if missing)
-│  10. [Large only] Spawn RESEARCHER → RESEARCH.md
+│  8. Load analytics (trust score, failure patterns)
+│  9. Generate PROJECT_CONTEXT.md (codebase patterns)
+│  10. Auto-generate CLAUDE.md (if missing)
+│  11. [Large only] Spawn RESEARCHER → RESEARCH.md
 │
-│  11. Spawn PLANNER → self-validates 8 dimensions → PLAN.md
-│  12. Initialize STATE.md + HANDOFF.md
+│  12. Spawn PLANNER → self-validates 8 dimensions → PLAN.md
+│  13. Initialize STATE.md + HANDOFF.md
 │
 │  WAVE 1 (parallel, model chosen adaptively):
-│  ├── EXECUTOR (Task 1) ──► confidence: HIGH ──► checkpoint ──► TDD ──► self-review ──► receipt ──► commit
-│  └── EXECUTOR (Task 2) ──► confidence: MEDIUM ──► checkpoint ──► TDD ──► receipt ──► commit
+│  ├── EXECUTOR (Task 1) ──► confidence: HIGH ──► checkpoint ──► TDD ──► self-review ──► receipt (raw output) ──► commit
+│  └── EXECUTOR (Task 2) ──► confidence: MEDIUM ──► checkpoint ──► TDD ──► receipt (raw output) ──► commit
 │  │
-│  ├── Verify receipts + confidence levels
+│  ├── Verify receipts (reject if missing raw test/verify output)
 │  ├── Merge handoffs into HANDOFF.md
 │  ├── REVIEWER (Task 1) → APPROVED
 │  └── REVIEWER (Task 2) → NEEDS FIX (medium confidence) → extract lesson → re-execute
@@ -457,10 +466,10 @@ User: /shipit:go add user authentication
 │  ├── Verify receipt, merge handoff
 │  └── REVIEWER (Task 3) → APPROVED
 │
-│  13. VERIFIER → epic-level requirements + integration check → PASS
-│  14. Code health delta: +3 (codebase improved)
-│  15. Update analytics.json (trust +5, cost $0.85)
-│  16. Return "complete"
+│  14. VERIFIER → epic-level requirements + integration check → PASS
+│  15. Code health delta: +3 (codebase improved)
+│  16. Update analytics.json (trust +5, cost $0.85)
+│  17. Return "complete"
 │
 └─────────────────────────────────────────────────────
 
@@ -512,7 +521,7 @@ Every code task follows the RED, GREEN, REFACTOR cycle:
 📦 COMMIT    → Atomic commit with proper type prefix.
 ```
 
-> **Hard gate:** If TDD is enabled, the executor CANNOT mark a task complete without test output showing PASS. Wrote code before the test? Delete it. Start over.
+> **Hard gate:** If TDD is enabled, the executor CANNOT mark a task complete without test output showing PASS. Wrote code before the test? Delete it. Start over. Receipts must include raw test output — summaries are rejected.
 
 ### Auto-Loop Mechanism
 
@@ -596,21 +605,31 @@ ShipIt has a multi-layered quality assurance system that catches issues at every
 ```
 ┌─ BEFORE PLANNING ──────────────────────────────────┐
 │  Prompt Review ──► Requirement Discovery            │
+│  Design Exploration (2-3 approaches → user approves)│  ◄── NEW
 │  PROJECT_CONTEXT.md ──► Auto-CLAUDE.md              │
+└─────────────────────────────────────────────────────┘
+         │
+┌─ DURING PLANNING ─────────────────────────────────┐
+│  Planner explores codebase (MUST, not optional)     │
+│  8-dimension self-validation                        │
+│  Red Flags tables catch planning rationalizations   │  ◄── ENHANCED
 └─────────────────────────────────────────────────────┘
          │
 ┌─ DURING EXECUTION ─────────────────────────────────┐
 │  Re-anchor to original task                         │
 │  Read LESSONS.md (avoid past mistakes)              │
 │  Follow PROJECT_CONTEXT.md patterns                 │
+│  Red Flags tables catch TDD/process rationalizations│  ◄── ENHANCED
 │  TDD: RED → GREEN → REFACTOR                        │
 │  Self-review own diff                               │
-│  Generate receipt (JSON proof)                      │
+│  Capture RAW test/verify output (not summaries)     │  ◄── NEW
+│  Generate evidence-based receipt                    │
 │  Atomic commit                                      │
 └─────────────────────────────────────────────────────┘
          │
 ┌─ AFTER EXECUTION ──────────────────────────────────┐
-│  Receipt verification (tests ran? verify passed?)   │
+│  Receipt verification — REJECT if missing raw output│  ◄── ENHANCED
+│  Red Flags tables catch review-skipping excuses     │  ◄── ENHANCED
 │  Code review: spec compliance + quality + patterns  │
 │  Extract lessons → LESSONS.md (learning loop)       │
 └─────────────────────────────────────────────────────┘
@@ -668,9 +687,12 @@ How ShipIt compares to other Claude Code plugins:
 | Self-validating plans | 8 dimensions + dep-aware waves | No | No |
 | Research before planning | Researcher agent | No | Phase researcher |
 | Shared codebase context | PROJECT_CONTEXT.md (real code) | No | Codebase mapper |
+| **Mandatory design gate** | **2-3 approaches → user approval → DESIGN.md** | **Hard gate (brainstorming skill)** | **No** |
+| **Deep rationalization prevention** | **41-row Red Flags tables (executor/planner/conductor)** | **Red Flags tables (skills)** | **No** |
+| **Evidence-based receipts** | **Raw test/verify output required, summaries rejected** | **No** | **No** |
 | TDD enforcement | Built-in hard gate | Skill (optional) | No |
 | Re-anchoring / drift prevention | Every executor | No | No |
-| Receipt-based proof | JSON receipts with confidence | No | No |
+| Receipt-based proof | JSON receipts with confidence + raw output | No | No |
 | Per-task code review | Receipt + spec + quality | No | No |
 | Learning loop (LESSONS.md) | Review findings → future executors | No | No |
 | Epic-level verification + integration | Merged verifier (requirements + E2E) | No | Goal-backward verify |
@@ -768,7 +790,7 @@ shipit/
 12. **Adaptive model selection** — Dynamic per-task model choice based on complexity.
 13. **Git checkpoints** — Tag before each task. Rollback anytime.
 14. **Re-anchoring** — Every executor re-reads original task to prevent drift.
-15. **Receipt-based proof** — JSON receipts with confidence scoring.
+15. **Evidence-based receipts** — JSON receipts with raw test/verify output. Summaries rejected.
 16. **Learning loop** — LESSONS.md propagates review findings.
 17. **Adaptive re-planning** — When approach fails, replan remaining (keep completed).
 18. **Epic-level verification** — ALL original requirements with evidence + integration.
@@ -778,6 +800,9 @@ shipit/
 22. **Cost awareness** — Track cost per task. Respect budget limits.
 23. **MCP hooks** — Optional blast radius, dependency graph, docs integration.
 24. **Requirement discovery** — Vague prompts trigger Socratic questioning.
+25. **Design before planning** — Non-trivial tasks require design approval. Prevents building the wrong thing faster.
+26. **Deep rationalization prevention** — Red Flags tables catch 41 specific excuses across executor, planner, and conductor.
+27. **Evidence over claims** — Raw output required in receipts. No paraphrasing. Conductor rejects receipts without proof.
 
 ---
 
