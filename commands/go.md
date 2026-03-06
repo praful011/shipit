@@ -114,6 +114,37 @@ Follow the `requirement-discovery` skill (`skills/requirement-discovery/SKILL.md
 
 **GATE: Prompt enriched with user's answers (or skipped for specific prompts).**
 
+### Step 1.8: Design Exploration (Non-Trivial Tasks)
+
+**HARD GATE: No planning without design approval for non-trivial tasks.**
+
+Before analyzing complexity in detail, do a quick scope check. If the task likely touches 2+ files:
+
+1. **Explore project context** — Use Glob/Grep to find relevant code, check recent commits with `git log --oneline -10`
+2. **Propose 2-3 approaches** — Present approaches with trade-offs:
+   - Approach A: [description] — Pros: ... Cons: ...
+   - Approach B: [description] — Pros: ... Cons: ...
+   - **Recommended:** [which and why]
+3. **Get user approval** — Use AskUserQuestion:
+   - Present approaches with your recommendation
+   - "Which approach? (1) Approach A, (2) Approach B, (3) Recommended [default]"
+4. **Record chosen approach** — Save to `.shipit/DESIGN.md`:
+   ```markdown
+   # Design Decision — <timestamp>
+   ## Task: <task description>
+   ## Approaches Considered
+   1. <approach A> — rejected because ...
+   2. <approach B> — chosen because ...
+   ## Decision: <chosen approach>
+   ```
+5. **Pass to conductor** — Include chosen approach in conductor prompt so planner builds the RIGHT thing
+
+**Skip if:**
+- Task is obviously quick (single file, config change, typo fix)
+- User explicitly says "just do it" or "skip design"
+
+**GATE: User has approved an approach (or task confirmed as quick). Do NOT proceed to planning without design approval for non-trivial tasks.**
+
 ## Step 2: Analyze Task Complexity
 
 NOW you may examine the codebase. Use Glob and Grep to find relevant files. Read key files to understand the current state.
@@ -161,6 +192,7 @@ Codebase context from orchestrator analysis:
 - Relevant patterns: [any patterns noticed in Step 2]
 - Branch: [current branch name]
 - Specificity score: [score from Step 1.5, e.g. 45% — conductor uses this to decide on requirement discovery]
+- Design approach: [chosen approach from Step 1.8, or 'quick task — skipped']
 "
 )
 ```
@@ -277,6 +309,8 @@ CONTINUATION: Resume executing the task: $ARGUMENTS
 - [ ] Step 1.5: Prompt reviewed, AskUserQuestion called, user chose a prompt
 - [ ] Step 1.5: Prompt saved to `.shipit/prompts/history.md`
 - [ ] Step 1.7: Requirement discovery triggered if Specificity < 60% (or skipped)
+- [ ] Step 1.8: Design exploration completed for non-trivial tasks (or skipped for quick)
+- [ ] Step 1.8: Chosen approach saved to `.shipit/DESIGN.md` (if applicable)
 - [ ] Step 2: Complexity classified (quick/medium/large)
 - [ ] Step 2.5: Feature branch created (if medium/large)
 - [ ] Step 3: Conductor agent spawned with full context + specificity score (if medium/large)
