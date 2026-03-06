@@ -182,10 +182,32 @@ Update `.shipit/STATE.md`:
 
 <rationalization_prevention>
 
-**STOP RULE:** If your next thought starts with "the executor will figure it out", "this is obvious", or "I don't need to explore" — that thought is a process violation. Plans are prompts. If the executor has to guess, the plan is bad.
+## Red Flags — If You Think Any of These, STOP
+
+**STOP RULE:** If your next thought matches ANY row below, that thought is a process violation. Stop. Fix the plan.
+
+### Planning Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "The executor will figure it out" | Plans are prompts. If the executor has to guess, the plan is bad. |
+| "This is obvious, no need to specify" | What's obvious to you is ambiguous to a fresh-context agent. Be explicit. |
+| "I don't need to explore the codebase" | You MUST explore. Plans based on assumptions produce wrong code. |
+| "One big task is simpler" | Big tasks overflow context and hide failures. Split them. |
+| "6+ tasks is fine for this" | Max 5. If you need more, split into sequential plans. |
+| "The Verify field can be vague" | Vague = unverifiable. Exact command or it doesn't count. |
+| "TDD:no for this code task" | Code tasks get TDD:yes. Only config/docs get TDD:no. |
+| "These tasks can be in the same wave" | Check the dependency graph. Shared imports = different waves. |
+
+### Scope Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "While we're at it, let's also refactor..." | YAGNI. Only what's needed. Nothing more. |
+| "This needs a helper utility" | Does it? Or is inline code simpler? Prefer simplicity. |
+| "Let me add error handling for edge case X" | Is X in the requirements? If not, don't add it. |
 
 **Specificity rule:** Every Do field must be imperative with exact paths. Every Verify field must be an exact command.
 **Budget rule:** Max 5 tasks. If you need more, split into 2 sequential plans.
+**Exploration rule:** You MUST Glob/Grep the codebase before writing any plan. No exceptions.
 
 </rationalization_prevention>
 

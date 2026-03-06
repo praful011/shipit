@@ -127,7 +127,22 @@ c. Confirm it works
 
 **Incremental testing:** During development (RED/GREEN cycles), run ONLY the tests related to changed files. This is faster for large test suites. The full suite runs at verification (verifier agent).
 
-**GATE: Verify command MUST have been run and MUST show success.**
+**HARD GATE: Verification Evidence Required**
+
+You MUST capture and store the RAW output of the verify command. Not a summary — the actual output.
+
+```bash
+# Capture raw output
+$VERIFY_COMMAND 2>&1 | tee /tmp/shipit-verify-task-$TASK_NUMBER.txt
+```
+
+If the verify command fails:
+1. Read the raw output to understand why
+2. Fix the issue (Rules 1-3 from deviation rules)
+3. Re-run and capture again
+4. Max 3 attempts — after that, signal `<shipit-blocked>`
+
+**GATE: Verify command MUST have been run, raw output captured, and output MUST show success. No summaries. No paraphrasing. Actual output.**
 
 ## Step 4.5: Self-Review Before Commit
 
@@ -196,8 +211,10 @@ mkdir -p .shipit/receipts
   "confidence": "high|medium|low",
   "commit": "<short commit hash from git log -1 --format=%h>",
   "tests_run": true,
+  "test_output_raw": "<FULL raw output from test run — not a summary>",
   "test_output_summary": "<e.g., 12 passed, 0 failed>",
   "verify_command": "<the exact verify command from PLAN.md>",
+  "verify_output_raw": "<FULL raw output from verify command>",
   "verify_result": "pass",
   "files_changed": ["<file1>", "<file2>"],
   "self_review": true,
@@ -207,13 +224,23 @@ mkdir -p .shipit/receipts
 ```
 
 **This receipt is MACHINE-VERIFIABLE proof that you:**
-1. Ran tests (not just claimed they pass)
-2. Ran the verify command
+1. Ran tests (not just claimed they pass) — raw output proves it
+2. Ran the verify command — raw output proves it
 3. Performed self-review
 4. Created the checkpoint
 5. Committed the code
 
-**GATE: Receipt file written with all fields populated.**
+**HARD GATE: Receipt Rejection Criteria**
+
+The conductor and reviewer will REJECT your receipt if:
+- `test_output_raw` is empty, says "not captured", or is a summary instead of raw output
+- `verify_output_raw` is empty or missing
+- `verify_result` says "pass" but `verify_output_raw` shows failures
+- `tests_run` is true but `test_output_raw` contains no test framework output
+
+A rejected receipt means your task is NOT complete. The conductor will re-spawn you.
+
+**GATE: Receipt file written with all fields populated, including raw output evidence.**
 
 ## Step 6: Write Task Handoff
 
@@ -297,11 +324,41 @@ No user permission needed for Rules 1-3. Track all deviations in HANDOFF.md entr
 
 <rationalization_prevention>
 
-**STOP RULE:** If your next thought starts with "just", "skip", "too simple", "I already", "while I'm here", or "I'll do it later" — that thought is a process violation. Stop. Follow the current step. No exceptions.
+## Red Flags — If You Think Any of These, STOP
+
+**STOP RULE:** If your next thought matches ANY row below, that thought is a process violation. Stop. Follow the current step.
+
+### TDD Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "This is too simple to test" | Simple code has simple tests. Write it in 10 seconds. |
+| "I'll write the test after" | "After" means never. RED phase comes first. Always. |
+| "I already tested it manually" | Manual testing is not repeatable or automated. Write the test. |
+| "The test would just assert true" | Then it takes 10 seconds. Write it. |
+| "I know this function works" | Your confidence is not proof. A test IS proof. |
+| "Just this once without a test" | "Just this once" always becomes "every time". |
+
+### Process Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "Let me just quickly..." | "Just quickly" = skipping the process. Follow the step. |
+| "I'll clean this up later" | Later never comes. Do it now or log to DEFERRED.md. |
+| "While I'm here, I should also..." | Scope creep. Not your task = not your fix. DEFERRED.md. |
+| "This is obvious, no need to verify" | Obvious things break. Run the verify command. |
+| "I already know what the code does" | You might be wrong. Read the file. Every time. |
+| "The self-review is overkill" | Debug artifacts in commits waste everyone's time. Check the diff. |
+
+### Staging & Commit Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "git add . is fine, I only changed task files" | You might have stray changes. Stage individually. Always. |
+| "This commit message is good enough" | Type prefix + description. Follow the format. |
+| "I'll combine these into one commit" | Atomic commits. One task = one commit. |
 
 **Scope rule:** Unrelated issues go to DEFERRED.md. Not your task = not your fix.
 **TDD rule:** Test FIRST. No code before a failing test. No exceptions for "simple" code.
 **Staging rule:** Stage files individually. Never `git add .` or `git add -A`.
+**Evidence rule:** Raw output in receipt. Not summaries. Not claims. Actual output.
 
 </rationalization_prevention>
 
@@ -351,6 +408,9 @@ When `current_task > total_tasks`:
 - [ ] Verify command run and shows success
 - [ ] Self-review completed (no debug code, no unnecessary changes)
 - [ ] Receipt file written to `.shipit/receipts/task-N.json`
+- [ ] Raw test output captured (not summarized) in receipt
+- [ ] Raw verify output captured (not summarized) in receipt
+- [ ] Receipt contains actual evidence, not claims
 - [ ] Files staged individually (never `git add .`)
 - [ ] Atomic commit created with proper type prefix
 - [ ] HANDOFF.md appended (not rewritten) with task summary

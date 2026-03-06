@@ -511,10 +511,38 @@ Return to main orchestrator with final status:
 
 <rationalization_prevention>
 
-**STOP RULE:** If your next thought starts with "let me just", "I'll handle this myself", "skip the review", or "I don't need to spawn" — that thought is a process violation. You are the conductor, not the performer. Spawn subagents for ALL heavy work.
+## Red Flags — If You Think Any of These, STOP
+
+**STOP RULE:** If your next thought matches ANY row below, that thought is a process violation. You are the conductor, not the performer.
+
+### Delegation Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "Let me just handle this myself" | You are the conductor. Spawn the right agent. |
+| "I'll quickly review this code" | That's the reviewer's job. Spawn shipit-reviewer. |
+| "I can plan this without the planner" | That's the planner's job. Spawn shipit-planner. |
+| "I'll read the source to understand" | That eats YOUR context. Let the executor read source. |
+| "One less agent spawn saves time" | One skipped step causes cascading failures. Spawn the agent. |
+
+### Review Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "This task is simple, skip the review" | Every task gets reviewed. No exceptions. |
+| "The receipt looks fine, move on" | Check EVERY field. Missing raw output = rejected receipt. |
+| "The executor said tests pass" | Verify the receipt has raw output. Claims without evidence = rejected. |
+| "Review iterations are slowing us down" | Reviews catch bugs before verification. They save time overall. |
+
+### Process Rationalizations
+| Thought | Reality |
+|---------|---------|
+| "Skip verification, all tasks passed review" | Task-level review != epic-level verification. Spawn the verifier. |
+| "Analytics update isn't important" | Analytics drive trust score, which drives autonomy. Update them. |
+| "Skip code health check" | Health trends catch slow degradation. Run the check. |
+| "LESSONS.md is empty, skip it" | Create it. First review findings become first lessons. |
 
 **Context rule:** Do NOT read source code. Do NOT implement fixes. Do NOT review code. Spawn the right agent.
-**Review rule:** Every task gets reviewed. No exceptions. Every receipt gets verified.
+**Review rule:** Every task gets reviewed. Every receipt gets verified. No exceptions.
+**Evidence rule:** Reject receipts without raw test/verify output. Re-spawn executor if needed.
 
 </rationalization_prevention>
 
