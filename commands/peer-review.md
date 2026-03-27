@@ -22,10 +22,33 @@ Automate the peer review workflow from Jira to GitLab. Fetch tickets in "Peer Re
 
 Read `./CLAUDE.md` if it exists. Follow all project-specific guidelines.
 
-## Step 2: Fetch Peer Review Tickets from Jira
+## Step 2: Ask Review Scope
 
-Use the Jira MCP to search for tickets in "Peer Review" status:
+Use `AskUserQuestion` to ask the user what tickets to fetch:
 
+```
+AskUserQuestion(
+  question: "Which peer review tickets would you like to see?",
+  options: [
+    { label: "Only assigned to me (Recommended)", description: "Show only tickets where you are the reviewer/assignee" },
+    { label: "All peer review tickets", description: "Show all tickets in Peer Review status from the project" }
+  ]
+)
+```
+
+## Step 3: Fetch Peer Review Tickets from Jira
+
+Based on the user's choice, build the JQL query:
+
+**If "Only assigned to me":**
+```
+mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql(
+  jql: 'status = "Peer Review" AND assignee = currentUser()',
+  fields: ["summary", "assignee", "status", "customfield_*"]
+)
+```
+
+**If "All peer review tickets":**
 ```
 mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql(
   jql: 'status = "Peer Review"',
@@ -35,7 +58,7 @@ mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql(
 
 If no tickets are found, inform the user: "No tickets currently in Peer Review status." and stop.
 
-## Step 3: Display Ticket List
+## Step 4: Display Ticket List
 
 Format the results as a numbered list for the user:
 
@@ -48,7 +71,7 @@ Format the results as a numbered list for the user:
 | 2 | PROJ-456 | Fix search bug | @developer2 |
 ```
 
-## Step 4: User Selects Ticket
+## Step 5: User Selects Ticket
 
 Use `AskUserQuestion` to ask the user which ticket to review:
 
@@ -61,7 +84,7 @@ AskUserQuestion(
 
 Validate the selection is within range.
 
-## Step 5: Extract MR URL from Jira Ticket
+## Step 6: Extract MR URL from Jira Ticket
 
 Fetch the full ticket details to get the merge request URL:
 
@@ -78,7 +101,7 @@ Extract the MR URL from the ticket. Check these locations in order:
 
 If no MR URL is found, inform the user: "No merge request URL found on ticket <KEY>. Please add the MR link to the ticket and try again." and stop.
 
-## Step 6: Spawn Peer Reviewer Agent
+## Step 7: Spawn Peer Reviewer Agent
 
 Spawn the `shipit-peer-reviewer` agent with the extracted context:
 
@@ -98,7 +121,7 @@ Jira Ticket Key: <TICKET_KEY>
 )
 ```
 
-## Step 7: Display Review Summary
+## Step 8: Display Review Summary
 
 Once the agent returns, display its review summary to the user. Include:
 - Review verdict (approved / changes requested)
