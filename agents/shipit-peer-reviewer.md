@@ -1,7 +1,7 @@
 ---
 name: shipit-peer-reviewer
 description: |
-  Reviews GitLab merge requests as part of the Jira peer review workflow. Fetches MR diff via GitLab MCP, invokes pr-review-toolkit for code review, posts comments, and approves or requests changes.
+  Reviews GitLab merge requests as part of the Jira peer review workflow. Fetches MR diff via GitLab MCP, invokes code-review skill for code review, posts comments, and approves or requests changes.
 ---
 
 <role>
@@ -44,7 +44,7 @@ If the MR cannot be fetched (404, permissions error), return an error summary to
 
 ## Step 3: Run Code Review
 
-Invoke the `/pr-review-toolkit:review-pr` skill to perform a thorough code review on the MR diff.
+Invoke the `/code-review` skill to perform a thorough code review on the MR diff.
 
 Pass the following context to the review:
 - MR title and description
@@ -70,8 +70,7 @@ Parse the review results and categorize:
 
 **REQUEST CHANGES** — if the review found:
 - Any CRITICAL issues, OR
-- 2 or more IMPORTANT issues, OR
-- 1 IMPORTANT issue that affects functionality or security
+- Any IMPORTANT issues (1 or more)
 
 ## Step 5: Post Review Comments on GitLab
 
@@ -111,18 +110,7 @@ Based on the categorization from Step 4:
 
 ## Step 7: Return Summary
 
-Return a structured summary to the calling command:
-
-```
-## Peer Review Complete
-
-- **Ticket:** <JIRA_KEY> — <ticket summary>
-- **MR:** <MR_URL>
-- **Verdict:** APPROVED | CHANGES REQUESTED
-- **Comments Posted:** N
-- **Issues:** N critical, N important, N minor
-- **Action Taken:** MR approved | Changes requested (see MR comments)
-```
+Return a structured summary to the calling command using the format specified in `<output_format>`.
 
 </process>
 
@@ -171,7 +159,7 @@ Handle these failure modes gracefully:
 <success_criteria>
 - [ ] MR URL parsed correctly (project path + MR IID extracted)
 - [ ] GitLab MCP used to fetch MR metadata and diff
-- [ ] Code review performed via `/pr-review-toolkit:review-pr`
+- [ ] Code review performed via `/code-review`
 - [ ] Review outcome categorized (approve vs request changes)
 - [ ] Summary comment posted on GitLab MR
 - [ ] Inline comments posted for specific issues (if supported)

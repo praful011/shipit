@@ -15,7 +15,7 @@ Automate the peer review workflow from Jira to GitLab. This skill connects the J
 |-----------|----------|-------------|
 | Jira MCP (Atlassian) | Yes | Must be configured with access to the Jira project containing peer review tickets |
 | GitLab MCP | Yes | Must be configured with access to fetch MRs, post comments, and approve/reject |
-| `/pr-review-toolkit:review-pr` | Yes | Existing code review skill used as the review engine |
+| `/code-review` | Yes | Existing code review skill used as the review engine |
 
 ## Workflow Overview
 
@@ -41,7 +41,7 @@ User invokes /shipit:peer-review
 [6] Agent fetches MR diff via GitLab MCP
         |
         v
-[7] Agent runs /pr-review-toolkit:review-pr
+[7] Agent runs /code-review
         |
         v
 [8] Agent posts review comments on GitLab MR
@@ -92,7 +92,7 @@ User invokes /shipit:peer-review
 |--------|-------------|
 | **Jira** | Reads tickets in "Peer Review" status; extracts MR URLs from custom fields or remote links |
 | **GitLab** | Fetches MR diffs; posts review comments; approves or requests changes |
-| **pr-review-toolkit** | Provides the code review engine (security, quality, patterns, testing checks) |
+| **code-review** | Provides the code review engine (security, quality, patterns, testing checks) |
 | **ShipIt ecosystem** | Follows ShipIt command/agent patterns; can be invoked alongside other ShipIt commands |
 
 ## Review Outcome Criteria
@@ -100,7 +100,7 @@ User invokes /shipit:peer-review
 | Verdict | Condition |
 |---------|-----------|
 | **APPROVE** | No CRITICAL issues, no IMPORTANT issues |
-| **REQUEST CHANGES** | Any CRITICAL issue, or 2+ IMPORTANT issues, or 1 IMPORTANT issue affecting functionality/security |
+| **REQUEST CHANGES** | Any CRITICAL issue, or any IMPORTANT issues (1 or more) |
 
 ## Error Handling
 
