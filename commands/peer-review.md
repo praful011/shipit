@@ -115,6 +115,8 @@ Review the merge request for Jira ticket <TICKET_KEY>: <TICKET_SUMMARY>
 Merge Request URL: <MR_URL>
 Jira Ticket Key: <TICKET_KEY>
 
+CRITICAL REMINDER: You MUST use Skill(skill: 'pr-review-toolkit:review-pr', args: '<MR_URL>') for the code review. DO NOT review the code yourself. The Skill tool call is mandatory and must happen before any review output.
+
 <files_to_read>
 ./CLAUDE.md
 </files_to_read>"

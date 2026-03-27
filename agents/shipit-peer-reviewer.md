@@ -42,29 +42,32 @@ Use the GitLab MCP to fetch the merge request details:
 
 If the MR cannot be fetched (404, permissions error), return an error summary to the calling command.
 
-## Step 3: Run Code Review
+## Step 3: Run Code Review via /pr-review-toolkit:review-pr
 
-**MANDATORY: You MUST use the `/pr-review-toolkit:review-pr` skill for the code review. This is NON-NEGOTIABLE.**
+<CRITICAL_GATE>
+YOUR VERY NEXT TOOL CALL IN THIS STEP **MUST** BE:
 
-Invoke it using the Skill tool:
 ```
-Skill(skill: "pr-review-toolkit:review-pr")
+Skill(skill: "pr-review-toolkit:review-pr", args: "<MR_URL>")
 ```
 
-Pass the following context to the review:
-- MR title and description
-- Full diff content
-- Target branch context
-- Any project conventions from `CLAUDE.md`
+This is a HARD GATE. You CANNOT proceed to Step 4 without calling this Skill tool first.
 
-The review toolkit will analyze:
-- Code quality and patterns
-- Security concerns
-- Error handling
-- Test coverage implications
-- Performance considerations
+DO NOT analyze the code yourself.
+DO NOT write your own review.
+DO NOT spawn your own review sub-agents.
+DO NOT summarize the diff and call it a review.
 
-**DO NOT** perform manual code review instead. **DO NOT** skip this step. If the skill fails, fall back to the `code-review` skill patterns, but ALWAYS attempt `/pr-review-toolkit:review-pr` first.
+The ONLY acceptable action is invoking the Skill tool with `pr-review-toolkit:review-pr`.
+
+If you catch yourself thinking "I can just review it myself" or "let me analyze the diff" — STOP. That is a violation. Call the Skill tool.
+</CRITICAL_GATE>
+
+The `/pr-review-toolkit:review-pr` skill will spawn its own specialized sub-agents (code-reviewer, silent-failure-hunter, pr-test-analyzer, type-design-analyzer, comment-analyzer) for a thorough multi-dimensional review.
+
+Pass the MR URL as the argument. The skill handles everything — you just receive the results.
+
+If the Skill tool call fails (tool not available), ONLY THEN fall back to reading the `skills/code-review/SKILL.md` reference and performing a manual review.
 
 ## Step 4: Categorize Review Outcome
 
