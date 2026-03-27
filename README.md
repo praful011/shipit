@@ -225,6 +225,7 @@ Revert to a previous task checkpoint (creates backup branch first).
 | `/shipit:rollback` | Rollback to a task checkpoint |
 | `/shipit:discuss <topic>` | Discussion mode — no code changes |
 | `/shipit:update` | Update to latest version |
+| `/shipit:peer-review` | Jira-to-GitLab peer review — lists tickets, fetches MR, reviews, approves/rejects |
 | `/shipit:help` | Show usage guide |
 
 ---
@@ -568,8 +569,9 @@ ShipIt uses 7 specialized agents, each spawned on demand in fresh context window
 | **Reviewer** | Receipt verification + spec + quality + pattern review, extracts lessons | By conductor after each executor |
 | **Verifier** | Epic-level requirements + integration check (merged) | By conductor after all tasks |
 | **Debugger** | Scientific method debugging | By `/shipit:debug` |
+| **Peer Reviewer** | Fetches GitLab MR, runs code review, posts comments, approves/rejects | By `/shipit:peer-review` |
 
-**Note:** Plan-checker merged into planner (self-validation). Integration-checker merged into verifier. 9 agents → 7 agents = faster, cheaper, simpler.
+**Note:** Plan-checker merged into planner (self-validation). Integration-checker merged into verifier. Core pipeline uses 7 agents. The Peer Reviewer is an additional agent for the `/shipit:peer-review` workflow.
 
 ### Self-Validating Plans (8 Dimensions)
 
@@ -650,7 +652,7 @@ ShipIt has a multi-layered quality assurance system that catches issues at every
 
 ### Skills
 
-ShipIt includes 9 reference skills that agents consult:
+ShipIt includes 10 reference skills that agents consult:
 
 | Skill | Purpose |
 |-------|---------|
@@ -663,6 +665,7 @@ ShipIt includes 9 reference skills that agents consult:
 | `code-review` | Review guidelines, severity levels, evidence requirements |
 | `git-workflow` | Branching, atomic commits, staging rules |
 | `verification-standards` | What "verified" means, forbidden language, evidence |
+| `peer-review` | Jira-to-GitLab peer review workflow reference |
 
 ---
 
@@ -720,7 +723,8 @@ shipit/
 │   ├── shipit-reviewer.md    # Per-task code review (2-stage)
 │   ├── shipit-verifier.md    # Final verification
 │   ├── shipit-integration-checker.md # Cross-task E2E check
-│   └── shipit-debugger.md    # Scientific debugging
+│   ├── shipit-debugger.md    # Scientific debugging
+│   └── shipit-peer-reviewer.md # Jira-to-GitLab peer review
 ├── commands/
 │   ├── go.md                 # /shipit:go — main command
 │   ├── quick.md              # /shipit:quick — fast execution
@@ -734,7 +738,8 @@ shipit/
 │   ├── rollback.md           # /shipit:rollback — checkpoint rollback
 │   ├── discuss.md            # /shipit:discuss — discussion mode
 │   ├── update.md             # /shipit:update — update plugin
-│   └── help.md               # /shipit:help — usage guide
+│   ├── help.md               # /shipit:help — usage guide
+│   └── peer-review.md        # /shipit:peer-review — Jira-to-GitLab review
 ├── prompts/
 │   ├── conductor-prompt.md   # Conductor spawn templates
 │   ├── executor-prompt.md    # Executor spawn template
