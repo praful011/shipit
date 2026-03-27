@@ -44,7 +44,12 @@ If the MR cannot be fetched (404, permissions error), return an error summary to
 
 ## Step 3: Run Code Review
 
-Invoke the `/pr-review-toolkit:review-pr` skill to perform a thorough code review on the MR diff.
+**MANDATORY: You MUST use the `/pr-review-toolkit:review-pr` skill for the code review. This is NON-NEGOTIABLE.**
+
+Invoke it using the Skill tool:
+```
+Skill(skill: "pr-review-toolkit:review-pr")
+```
 
 Pass the following context to the review:
 - MR title and description
@@ -58,6 +63,8 @@ The review toolkit will analyze:
 - Error handling
 - Test coverage implications
 - Performance considerations
+
+**DO NOT** perform manual code review instead. **DO NOT** skip this step. If the skill fails, fall back to the `code-review` skill patterns, but ALWAYS attempt `/pr-review-toolkit:review-pr` first.
 
 ## Step 4: Categorize Review Outcome
 
