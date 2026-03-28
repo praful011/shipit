@@ -147,10 +147,10 @@ From the review results, extract each CRITICAL and IMPORTANT issue. For each one
 
 ### 6.5.2: Read Existing Skill File
 
-Check if `skills/pr-review-patterns/SKILL.md` exists **in the current project's repo** (the repo being reviewed, NOT the shipit plugin repo):
+Check if `.claude/skills/pr-review-patterns/SKILL.md` exists **in the current project's repo** (the repo being reviewed, NOT the shipit plugin repo):
 
 ```bash
-cat skills/pr-review-patterns/SKILL.md
+cat .claude/skills/pr-review-patterns/SKILL.md
 ```
 
 If the file does not exist, create it from the template below. If it exists, read its current contents.
@@ -188,7 +188,7 @@ Count total entries across all categories. If adding new entries would exceed 30
 
 ### 6.5.6: Write Updated Skill File
 
-Write the updated skill file to `skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
+Write the updated skill file to `.claude/skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
 
 Each entry format:
 ```markdown
@@ -201,7 +201,7 @@ Each entry format:
 Commit the skill file change locally (do NOT push):
 
 ```bash
-git add skills/pr-review-patterns/SKILL.md
+git add .claude/skills/pr-review-patterns/SKILL.md
 git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
 ```
 
@@ -209,7 +209,7 @@ The user will push when ready. Do NOT run `git push`.
 
 ### Skill File Template
 
-If `skills/pr-review-patterns/SKILL.md` does not exist, create it with this template:
+If `.claude/skills/pr-review-patterns/SKILL.md` does not exist, create it with this template:
 
 ```markdown
 ---
@@ -312,6 +312,6 @@ Handle these failure modes gracefully:
 - [ ] Pattern extraction attempted for CRITICAL/IMPORTANT findings (best-effort)
 - [ ] Existing duplicate patterns cleaned up (cross-reviewer duplicates removed)
 - [ ] New patterns deduplicated against ALL existing entries (cross-reviewer)
-- [ ] Skill file written to project repo at `skills/pr-review-patterns/SKILL.md` (if patterns found)
+- [ ] Skill file written to project repo at `.claude/skills/pr-review-patterns/SKILL.md` (if patterns found)
 - [ ] Changes committed locally (not pushed)
 </success_criteria>

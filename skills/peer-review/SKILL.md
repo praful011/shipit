@@ -89,7 +89,7 @@ If the fetch fails (network, auth), the workflow stops and informs the user. Rev
 
 ## Learning Loop — Project-Specific Pattern Extraction
 
-After each review, the agent extracts CRITICAL and IMPORTANT findings into a skill file **in the reviewed project's repo** at `skills/pr-review-patterns/SKILL.md`. This creates a feedback loop where Claude learns from review findings and avoids repeating the same mistakes.
+After each review, the agent extracts CRITICAL and IMPORTANT findings into a skill file **in the reviewed project's repo** at `.claude/skills/pr-review-patterns/SKILL.md`. This creates a feedback loop where Claude learns from review findings and avoids repeating the same mistakes.
 
 ### How It Works
 

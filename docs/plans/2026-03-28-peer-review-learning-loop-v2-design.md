@@ -39,7 +39,7 @@ Skills are stored **in the reviewed project's repo** (not in the shipit plugin).
 - Patterns are project-specific and travel with the codebase
 
 ### Skill File Location
-`skills/pr-review-patterns/SKILL.md` inside the reviewed project's repo.
+`.claude/skills/pr-review-patterns/SKILL.md` inside the reviewed project's repo.
 
 ### Architecture
 
@@ -50,7 +50,7 @@ filter CRITICAL + IMPORTANT issues
        |
 generalize each finding (remove MR-specific details)
        |
-read existing skills/pr-review-patterns/SKILL.md (in project repo)
+read existing .claude/skills/pr-review-patterns/SKILL.md (in project repo)
        |
 deduplicate against ALL existing entries (cross-reviewer)
        |
