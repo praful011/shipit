@@ -101,7 +101,27 @@ Extract the MR URL from the ticket. Check these locations in order:
 
 If no MR URL is found, inform the user: "No merge request URL found on ticket <KEY>. Please add the MR link to the ticket and try again." and stop.
 
-## Step 7: Spawn Peer Reviewer Agent
+## Step 7: Sync Remote Refs (Hard Gate)
+
+<CRITICAL_GATE>
+Before spawning the reviewer agent, ensure the local repo has fresh remote tracking refs. This prevents reviewing stale code.
+
+Run `git fetch origin` in the project directory:
+
+```bash
+git fetch origin
+```
+
+**This is a hard gate.** If the fetch fails (network error, auth failure, etc.):
+1. Inform the user: "Failed to fetch remote refs from origin. Cannot proceed with review — remote state may be stale. Please check your network connection and git remote configuration."
+2. **Stop the workflow.** Do NOT proceed to spawn the reviewer agent.
+
+**Why this is safe:** `git fetch` only updates remote tracking refs (e.g., `origin/main`). It does NOT modify the working tree, current branch, or any local branches. There is zero risk to the developer's local work.
+
+**Why this is required:** The reviewer agent uses GitLab API for the MR diff (always current), but may also read local files for broader context. Stale remote refs could cause the agent to reference outdated code when providing context around MR changes.
+</CRITICAL_GATE>
+
+## Step 8: Spawn Peer Reviewer Agent
 
 Spawn the `shipit-peer-reviewer` agent with the extracted context:
 
@@ -117,13 +137,15 @@ Jira Ticket Key: <TICKET_KEY>
 
 CRITICAL REMINDER: You MUST use Skill(skill: 'pr-review-toolkit:review-pr', args: '<MR_URL>') for the code review. DO NOT review the code yourself. The Skill tool call is mandatory and must happen before any review output.
 
+IMPORTANT: Use the GitLab API to fetch the MR diff (via GitLab MCP). The API diff is always current from the remote — this is the primary source of truth for what changed. Do NOT rely solely on local file reads for the diff.
+
 <files_to_read>
 ./CLAUDE.md
 </files_to_read>"
 )
 ```
 
-## Step 8: Display Review Summary
+## Step 9: Display Review Summary
 
 Once the agent returns, display its review summary to the user. Include:
 - Review verdict (approved / changes requested)
@@ -138,6 +160,8 @@ Once the agent returns, display its review summary to the user. Include:
 - [ ] Tickets displayed as numbered list
 - [ ] User selected a ticket via AskUserQuestion
 - [ ] MR URL extracted from the selected Jira ticket
+- [ ] `git fetch origin` executed successfully (hard gate — blocks on failure)
 - [ ] Peer reviewer agent spawned with MR URL and ticket context
+- [ ] Agent instructed to use GitLab API for MR diff (primary source of truth)
 - [ ] Review summary displayed to user
 </success_criteria>

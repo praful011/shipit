@@ -119,6 +119,115 @@ Based on the categorization from Step 4:
 - Do NOT approve the merge request
 - The posted comments serve as the change request documentation
 
+## Step 6.5: Extract Patterns to Project Skill File (Best-Effort)
+
+After the review is complete (approved or changes requested), extract learnings into a project-specific skill file so Claude avoids repeating the same mistakes in future development on this project.
+
+**This entire step is best-effort.** If any part fails (file write, git commit, etc.), log a warning and continue to Step 7. Pattern extraction failures MUST NOT block the review from completing.
+
+### When to Run
+
+Only run this step if the review found **at least one CRITICAL or IMPORTANT issue**. If all issues are MINOR or no issues were found, skip to Step 7.
+
+### 6.5.1: Filter and Generalize Findings
+
+From the review results, extract each CRITICAL and IMPORTANT issue. For each one, create a generalized pattern:
+
+| Field | Description |
+|-------|-------------|
+| **Category** | One of: Security, Error Handling, Patterns, Testing, Performance |
+| **Severity** | CRITICAL or IMPORTANT |
+| **Pattern** | Generalized description of what went wrong. Remove all MR-specific details (file names, variable names, line numbers, branch names). Write it as a universal rule. |
+| **Prevention** | Concrete, actionable rule for what to do instead. Must be specific enough to follow without context. |
+
+**Example transformation:**
+- Raw finding: "CRITICAL: `api/users.py:42` — SQL injection in `get_user()` via string interpolation of `user_id`"
+- Generalized pattern: "SQL queries constructed via string interpolation instead of parameterized queries"
+- Prevention: "Always use parameterized queries or ORM methods for database access. Never interpolate user input into SQL strings."
+
+### 6.5.2: Read Existing Skill File
+
+Check if `skills/pr-review-patterns/SKILL.md` exists **in the current project's repo** (the repo being reviewed, NOT the shipit plugin repo):
+
+```bash
+cat skills/pr-review-patterns/SKILL.md
+```
+
+If the file does not exist, create it from the template below. If it exists, read its current contents.
+
+### 6.5.3: Deduplicate Against ALL Existing Entries
+
+**Cross-reviewer deduplication:** Compare each new pattern against ALL existing entries in the skill file (not just your own previous entries). Different reviewers may have already captured similar findings from different MRs.
+
+For each new pattern:
+1. Find all existing entries in the **same category** (e.g., all Security entries)
+2. Compare the new pattern's description against each existing entry
+3. If any existing entry has >80% semantic overlap (same root cause, same prevention approach), **skip the new pattern** — it's a duplicate
+4. Use your judgment for similarity — do NOT rely on exact string matching
+
+Only patterns that are genuinely new (not already captured in any form) should be added.
+
+### 6.5.4: Enforce 30-Entry Cap
+
+Count total entries across all categories. If adding new entries would exceed 30:
+1. CRITICAL entries always get priority
+2. Remove the **oldest IMPORTANT** entries to make room (entries are ordered by when they were added — oldest are at the top of each category section)
+3. Never remove a CRITICAL entry to make room for an IMPORTANT entry
+
+### 6.5.5: Write Updated Skill File
+
+Write the updated skill file to `skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
+
+Each entry format:
+```markdown
+- **[SEVERITY]** _Pattern:_ <generalized pattern description>
+  _Prevention:_ <actionable prevention rule>
+```
+
+### 6.5.6: Commit Locally
+
+Commit the skill file change locally (do NOT push):
+
+```bash
+git add skills/pr-review-patterns/SKILL.md
+git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
+```
+
+The user will push when ready. Do NOT run `git push`.
+
+### Skill File Template
+
+If `skills/pr-review-patterns/SKILL.md` does not exist, create it with this template:
+
+```markdown
+---
+name: pr-review-patterns
+description: Code patterns to avoid — learned from peer reviews. Read before writing code.
+---
+
+# Learned Patterns from Peer Reviews
+
+Patterns below were discovered during peer reviews.
+Follow these rules when writing code to avoid repeating known mistakes.
+
+**Max 30 entries.** New CRITICAL entries replace oldest IMPORTANT if at cap.
+
+## Security
+_No patterns yet._
+
+## Error Handling
+_No patterns yet._
+
+## Patterns
+_No patterns yet._
+
+## Testing
+_No patterns yet._
+
+## Performance
+_No patterns yet._
+```
+
 ## Step 7: Return Summary
 
 Return a structured summary to the calling command:
@@ -188,4 +297,8 @@ Handle these failure modes gracefully:
 - [ ] MR approved or changes requested based on review outcome
 - [ ] Structured summary returned to calling command
 - [ ] Error cases handled gracefully
+- [ ] Pattern extraction attempted for CRITICAL/IMPORTANT findings (best-effort)
+- [ ] Patterns deduplicated against ALL existing entries (cross-reviewer)
+- [ ] Skill file written to project repo at `skills/pr-review-patterns/SKILL.md` (if patterns found)
+- [ ] Changes committed locally (not pushed)
 </success_criteria>
