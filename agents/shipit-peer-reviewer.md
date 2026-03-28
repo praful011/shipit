@@ -155,9 +155,21 @@ cat skills/pr-review-patterns/SKILL.md
 
 If the file does not exist, create it from the template below. If it exists, read its current contents.
 
-### 6.5.3: Deduplicate Against ALL Existing Entries
+### 6.5.3: Clean Up Existing Duplicates
 
-**Cross-reviewer deduplication:** Compare each new pattern against ALL existing entries in the skill file (not just your own previous entries). Different reviewers may have already captured similar findings from different MRs.
+**Before adding new patterns, scan the entire file for duplicates that already exist.** Two different reviewers may have independently added the same pattern during separate review sessions. This cleanup runs EVERY time, regardless of whether new patterns are being added.
+
+For each category section:
+1. Compare every entry against every other entry in the **same category**
+2. If two entries have >80% semantic overlap (same root cause, same prevention approach), **remove the less specific one** (keep the one with the better prevention rule)
+3. If both are equally specific, keep the older one (appears first in the file) and remove the newer one
+4. Use your judgment for similarity — do NOT rely on exact string matching
+
+After cleanup, the file may have fewer entries than before. This is expected and correct.
+
+### 6.5.4: Deduplicate New Patterns Against Existing Entries
+
+**Cross-reviewer deduplication:** Compare each new pattern against ALL remaining entries in the skill file (after cleanup). Different reviewers may have already captured similar findings.
 
 For each new pattern:
 1. Find all existing entries in the **same category** (e.g., all Security entries)
@@ -167,14 +179,14 @@ For each new pattern:
 
 Only patterns that are genuinely new (not already captured in any form) should be added.
 
-### 6.5.4: Enforce 30-Entry Cap
+### 6.5.5: Enforce 30-Entry Cap
 
 Count total entries across all categories. If adding new entries would exceed 30:
 1. CRITICAL entries always get priority
 2. Remove the **oldest IMPORTANT** entries to make room (entries are ordered by when they were added — oldest are at the top of each category section)
 3. Never remove a CRITICAL entry to make room for an IMPORTANT entry
 
-### 6.5.5: Write Updated Skill File
+### 6.5.6: Write Updated Skill File
 
 Write the updated skill file to `skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
 
@@ -184,7 +196,7 @@ Each entry format:
   _Prevention:_ <actionable prevention rule>
 ```
 
-### 6.5.6: Commit Locally
+### 6.5.7: Commit Locally
 
 Commit the skill file change locally (do NOT push):
 
@@ -298,7 +310,8 @@ Handle these failure modes gracefully:
 - [ ] Structured summary returned to calling command
 - [ ] Error cases handled gracefully
 - [ ] Pattern extraction attempted for CRITICAL/IMPORTANT findings (best-effort)
-- [ ] Patterns deduplicated against ALL existing entries (cross-reviewer)
+- [ ] Existing duplicate patterns cleaned up (cross-reviewer duplicates removed)
+- [ ] New patterns deduplicated against ALL existing entries (cross-reviewer)
 - [ ] Skill file written to project repo at `skills/pr-review-patterns/SKILL.md` (if patterns found)
 - [ ] Changes committed locally (not pushed)
 </success_criteria>

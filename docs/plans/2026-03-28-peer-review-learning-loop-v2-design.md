@@ -61,12 +61,15 @@ cap at 30 entries (CRITICAL replaces oldest IMPORTANT)
 write file + commit locally (user pushes when ready)
 ```
 
-### Deduplication Strategy
-- Compare each new pattern against ALL existing entries (handles multiple reviewers adding similar findings)
+### Deduplication Strategy (Two-Phase)
+
+**Phase 1: Clean up existing duplicates** — Before adding new patterns, scan the entire file for duplicates that already exist from separate review sessions by different reviewers. If two entries in the same category have >80% semantic overlap, remove the less specific one.
+
+**Phase 2: Deduplicate new patterns** — Compare each new pattern against ALL remaining entries. If >80% semantic overlap with any existing entry, skip the new pattern.
+
 - Match by category first (must be same category)
-- Then compare descriptions — if >80% semantic overlap, skip the new pattern
 - Agent uses judgment for similarity (no exact string matching)
-- This prevents duplicates even when different team members review different MRs
+- This prevents AND cleans up duplicates even when different team members review different MRs
 
 ### Pattern Extraction Process
 1. Filter review results to CRITICAL + IMPORTANT severity only
