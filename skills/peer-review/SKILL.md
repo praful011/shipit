@@ -1,20 +1,20 @@
 ---
 name: peer-review
-description: End-to-end peer review workflow — Jira ticket selection to GitLab MR review, comments, and approval
+description: End-to-end peer review workflow — Jira or GitLab-native MR selection, code review, comments, approval, pattern learning, and issue tracking
 ---
 
 # Peer Review
 
 ## Purpose
 
-Automate the peer review workflow from Jira to GitLab. This skill connects the Jira ticketing system with GitLab merge request reviews, enabling a streamlined process where developers can select a ticket in "Peer Review" status and have an automated code review performed on the associated merge request.
+Automate the peer review workflow with two entry paths: **Jira flow** (tickets in "Peer Review" status → extract MR) or **GitLab flow** (MRs assigned to you directly). Both paths converge at automated code review with GitLab comments, approval/rejection, pattern learning on the MR's source branch, and automatic GitLab issue creation for critical findings.
 
 ## Prerequisites
 
 | Dependency | Required | Description |
 |-----------|----------|-------------|
-| Jira MCP (Atlassian) | Yes | Must be configured with access to the Jira project containing peer review tickets |
-| GitLab MCP | Yes | Must be configured with access to fetch MRs, post comments, and approve/reject |
+| Jira MCP (Atlassian) | For Jira flow | Must be configured with access to the Jira project containing peer review tickets |
+| GitLab MCP | Yes | Must be configured with access to fetch MRs, post comments, approve/reject, and create issues |
 | `/pr-review-toolkit:review-pr` | Yes | Existing code review skill used as the review engine |
 
 ## Workflow Overview
@@ -23,22 +23,28 @@ Automate the peer review workflow from Jira to GitLab. This skill connects the J
 User invokes /shipit:peer-review
         |
         v
-[1] Fetch Jira tickets (status = "Peer Review")
+[1] Choose review source: Jira or GitLab
+        |
+    ----+----
+    |        |
+    v        v
+ [JIRA]   [GITLAB]
+    |        |
+    v        v
+[2] Fetch   [2] Fetch MRs
+ tickets     assigned to me
+    |        |
+    v        v
+[3] User selects ticket/MR
         |
         v
-[2] Display numbered ticket list
-        |
-        v
-[3] User selects ticket
-        |
-        v
-[4] Extract MR URL from Jira ticket
+[4] Extract MR URL (Jira: fields → remote links → description → comments)
         |
         v
 [5] git fetch origin (HARD GATE — blocks on failure)
         |
         v
-[6] Spawn shipit-peer-reviewer agent
+[6] Spawn shipit-peer-reviewer agent (with MR source branch)
         |
         v
 [7] Agent fetches MR diff via GitLab API (primary source of truth)
@@ -53,29 +59,36 @@ User invokes /shipit:peer-review
 [10] Agent approves MR or requests changes
         |
         v
-[11] Extract patterns to project skill file (best-effort)
+[11] Extract patterns → commit on MR source branch → push (best-effort)
         |
         v
-[12] Summary returned to user
+[12] Create GitLab issues for CRITICAL findings (best-effort)
+        |
+        v
+[13] Summary returned to user
 ```
 
 ## MCP Dependencies
 
-### Jira MCP Tools
+### Jira MCP Tools (Jira flow only)
 
 | Tool | Used In | Purpose |
 |------|---------|---------|
-| `searchJiraIssuesUsingJql` | Command (Step 2) | Fetch tickets where `status = "Peer Review"` |
-| `getJiraIssue` | Command (Step 5) | Get full ticket details to extract MR URL |
-| `getJiraIssueRemoteIssueLinks` | Command (Step 5, fallback) | Find MR URL in remote links if not in custom field |
+| `searchJiraIssuesUsingJql` | Command (Step 3J) | Fetch tickets where `status = "Peer Review"` |
+| `getJiraIssue` | Command (Step 6J) | Get full ticket details to extract MR URL |
+| `getJiraIssueRemoteIssueLinks` | Command (Step 6J, fallback) | Find MR URL in remote links if not in custom field |
+| Comment scanning | Command (Step 6J, fallback) | Scan issue comments for MR URLs if not in description |
 
 ### GitLab MCP Tools
 
 | Tool | Used In | Purpose |
 |------|---------|---------|
+| `list_merge_requests` | Command (Step 3G) | Fetch MRs assigned to user (GitLab flow) |
+| `get_merge_request_details` | Command (Step 8) | Get MR source branch for pattern commits |
 | MR fetch | Agent (Step 2) | Get merge request metadata and diff |
 | MR comment | Agent (Step 5) | Post review summary and inline comments |
 | MR approve | Agent (Step 6) | Approve the merge request when review passes |
+| `create_issue` | Agent (Step 6.6) | Create GitLab issues for CRITICAL findings |
 
 ## Branch Sync Gate
 
@@ -99,7 +112,7 @@ After each review, the agent extracts CRITICAL and IMPORTANT findings into a ski
 4. Deduplicate against ALL existing entries (cross-reviewer — handles multiple reviewers)
 5. Append only genuinely new patterns
 6. Enforce 30-entry cap (CRITICAL priority over IMPORTANT)
-7. Commit locally (user pushes when ready)
+7. Switch to MR source branch, commit, and push (patterns flow into target branch via MR)
 
 ### Key Design Decisions
 
@@ -108,8 +121,9 @@ After each review, the agent extracts CRITICAL and IMPORTANT findings into a ski
 | Skills in project repo (not shipit) | Claude reads them automatically when working on that project |
 | Cross-reviewer dedup | Multiple reviewers may find similar issues across different MRs |
 | Best-effort only | Pattern extraction failures must never block review completion |
-| Local commit only | User controls when patterns are shared with the team |
+| Commit on MR source branch + push | Patterns merge with target branch (e.g., dev) when MR is merged, not stranded on reviewer's branch |
 | 30-entry cap | Prevents unbounded growth; CRITICAL entries take priority |
+| GitLab issues for CRITICAL | Formal tracking for critical issues ensures they can't be missed or forgotten |
 
 ## Components
 
@@ -123,15 +137,15 @@ After each review, the agent extracts CRITICAL and IMPORTANT findings into a ski
 
 - **File:** `agents/shipit-peer-reviewer.md`
 - **Role:** Performs the actual code review. Fetches MR from GitLab, runs the review toolkit, posts comments, and approves or requests changes.
-- **Input:** MR URL, Jira ticket key, ticket summary.
-- **Output:** Structured review result with verdict, issues found, and actions taken.
+- **Input:** MR URL, Jira ticket key, ticket summary, MR source branch, MR target branch, GitLab project path.
+- **Output:** Structured review result with verdict, issues found, actions taken, pattern commit status, and GitLab issues created.
 
 ## Integration Points
 
 | System | Integration |
 |--------|-------------|
-| **Jira** | Reads tickets in "Peer Review" status; extracts MR URLs from custom fields or remote links |
-| **GitLab** | Fetches MR diffs; posts review comments; approves or requests changes |
+| **Jira** | Reads tickets in "Peer Review" status; extracts MR URLs from custom fields, remote links, description, or comments |
+| **GitLab** | Lists MRs assigned for review; fetches MR diffs; posts review comments; approves or requests changes; creates issues for CRITICAL findings |
 | **pr-review-toolkit** | Provides the code review engine (security, quality, patterns, testing checks) |
 | **ShipIt ecosystem** | Follows ShipIt command/agent patterns; can be invoked alongside other ShipIt commands |
 
@@ -152,3 +166,5 @@ The workflow handles these failure modes:
 - MR already merged or closed — warns user, skips approval action
 - Review toolkit failure — falls back to manual diff review patterns
 - Pattern extraction failure — logs warning, continues (best-effort, never blocks review)
+- Branch checkout failure (dirty working tree) — skips pattern commit, continues
+- GitLab issue creation failure — logs warning, continues (best-effort)

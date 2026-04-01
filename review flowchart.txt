@@ -1,0 +1,439 @@
+
+================================================================================
+         SHIPIT PEER REVIEW — COMPLETE ARCHITECTURE FLOWCHART
+================================================================================
+
+
+1. HIGH-LEVEL FLOW
+==================
+
+    ┌─────────────────────────────┐
+    │   /shipit:peer-review       │
+    └──────────────┬──────────────┘
+                   │
+                   ▼
+    ┌─────────────────────────────┐
+    │  Step 1: Load CLAUDE.md     │
+    └──────────────┬──────────────┘
+                   │
+                   ▼
+          ┌────────────────┐
+          │ Step 2: Choose │
+          │ review source  │
+          └───────┬────────┘
+                  │
+        ┌─────────┴─────────┐
+        │                   │
+        ▼                   ▼
+   ┌─────────┐        ┌──────────┐
+   │  JIRA   │        │  GITLAB  │
+   └────┬────┘        └────┬─────┘
+        │                  │
+        ▼                  ▼
+   ┌──────────┐      ┌───────────────┐
+   │ Step 2J: │      │ Step 3G:      │
+   │ Scope?   │      │ Fetch MRs     │
+   │ mine/all │      │ assigned to   │
+   └────┬─────┘      │ me (GitLab)   │
+        │            └───────┬───────┘
+        ▼                    │
+   ┌──────────┐              │
+   │ Step 3J: │              │
+   │ Jira MCP │              │
+   │ Fetch    │              │
+   │ tickets  │              │
+   └────┬─────┘              │
+        │                    │
+        ▼                    │
+   ┌──────────┐       ┌───────────┐
+   │ Step 4-5J│       │ Step 4-5G │
+   │ Display  │       │ Display   │
+   │ & select │       │ & select  │
+   │ ticket   │       │ MR        │
+   └────┬─────┘       └─────┬─────┘
+        │                    │
+        ▼                    │
+   ┌───────────┐             │
+   │ Step 6J:  │             │
+   │ Extract   │             │
+   │ MR URL    │             │
+   │ (4 places)│             │
+   └────┬──────┘             │
+        │                    │
+        └────────┬───────────┘
+                 │
+                 ▼  ← both flows converge here
+   ╔═══════════════════════════════════╗
+   ║ Step 7: git fetch origin          ║
+   ║ ░░░░░░ HARD GATE ░░░░░░          ║
+   ║ Fails? → Workflow STOPS           ║
+   ╚═════════════════╤═════════════════╝
+                     │
+                     ▼
+   ┌─────────────────────────────────┐
+   │ Step 8: Get MR source branch    │
+   │ (GitLab MCP → source_branch)   │
+   └────────────────┬────────────────┘
+                    │
+                    ▼
+   ┌─────────────────────────────────┐
+   │ SPAWN shipit-peer-reviewer      │
+   │ agent with:                     │
+   │  • MR URL                       │
+   │  • Ticket Key                   │
+   │  • Source Branch                │
+   │  • Target Branch                │
+   │  • GitLab Project Path          │
+   └────────────────┬────────────────┘
+                    │
+                    ▼
+            (see Agent Flow)
+                    │
+                    ▼
+   ┌─────────────────────────────────┐
+   │ Step 9: Display review summary  │
+   └─────────────────────────────────┘
+
+
+
+2. MR URL EXTRACTION (Jira Flow — Step 6J)
+===========================================
+
+   ┌─────────────────────────┐
+   │ Get Jira ticket details │
+   └────────────┬────────────┘
+                │
+                ▼
+   ┌───────────────────────────┐
+   │ 1. Custom fields contain  │───── Yes ──→ ✅ MR URL found
+   │    GitLab URL?            │
+   └────────────┬──────────────┘
+                │ No
+                ▼
+   ┌───────────────────────────┐
+   │ 2. Remote issue links     │───── Yes ──→ ✅ MR URL found
+   │    have MR?               │
+   └────────────┬──────────────┘
+                │ No
+                ▼
+   ┌───────────────────────────┐
+   │ 3. Description contains   │───── Yes ──→ ✅ MR URL found
+   │    MR URL?                │
+   └────────────┬──────────────┘
+                │ No
+                ▼
+   ┌───────────────────────────┐
+   │ 4. Comments contain       │───── Yes ──→ ✅ Use most recent
+   │    MR URL?                │              comment with URL
+   └────────────┬──────────────┘
+                │ No
+                ▼
+   ╔═══════════════════════════╗
+   ║ ❌ No MR URL found.       ║
+   ║ Checked: fields, links,   ║
+   ║ description, comments.    ║
+   ║ Workflow STOPS.            ║
+   ╚═══════════════════════════╝
+
+
+
+3. AGENT INTERNAL FLOW
+=======================
+
+   ┌──────────────────────────────────────────────────────┐
+   │              shipit-peer-reviewer Agent                │
+   │                                                       │
+   │  Input: MR URL, Ticket Key, Source Branch,            │
+   │         Target Branch, GitLab Project Path            │
+   ├──────────────────────────────────────────────────────-┤
+   │                                                       │
+   │  Step 1: Parse MR URL → project path + IID            │
+   │                       │                               │
+   │                       ▼                               │
+   │  Step 2: Fetch MR via GitLab MCP                      │
+   │          (metadata + diff)                            │
+   │                       │                               │
+   │          ┌────────────┴──── Fails? → Error, stop      │
+   │          │                                            │
+   │          ▼                                            │
+   │  ╔══════════════════════════════════╗                  │
+   │  ║ Step 3: HARD GATE               ║                  │
+   │  ║ Call /pr-review-toolkit:review-pr║                  │
+   │  ║                                  ║                  │
+   │  ║ Spawns 5 sub-agents:            ║                  │
+   │  ║  ┌────────────┐ ┌────────────┐  ║                  │
+   │  ║  │   Code     │ │  Silent    │  ║                  │
+   │  ║  │  Reviewer  │ │  Failure   │  ║                  │
+   │  ║  │            │ │  Hunter    │  ║                  │
+   │  ║  └────────────┘ └────────────┘  ║                  │
+   │  ║  ┌────────────┐ ┌────────────┐  ║                  │
+   │  ║  │   Test     │ │   Type     │  ║                  │
+   │  ║  │  Analyzer  │ │  Design    │  ║                  │
+   │  ║  │            │ │  Analyzer  │  ║                  │
+   │  ║  └────────────┘ └────────────┘  ║                  │
+   │  ║  ┌────────────┐                 ║                  │
+   │  ║  │  Comment   │                 ║                  │
+   │  ║  │  Analyzer  │                 ║                  │
+   │  ║  └────────────┘                 ║                  │
+   │  ╚════════════════╤═════════════════╝                  │
+   │                   │                                   │
+   │                   ▼                                   │
+   │  Step 4: Categorize verdict                           │
+   │          │                                            │
+   │          ├── No CRITICAL, no IMPORTANT → APPROVE      │
+   │          └── Any CRITICAL or 2+ IMPORTANT             │
+   │              → REQUEST CHANGES                        │
+   │                   │                                   │
+   │                   ▼                                   │
+   │  Step 5: Post comments on GitLab MR                   │
+   │          (summary + inline)                           │
+   │                   │                                   │
+   │                   ▼                                   │
+   │  Step 6: Approve or Request Changes                   │
+   │          via GitLab MCP                               │
+   │                   │                                   │
+   │                   ▼                                   │
+   │          CRITICAL or IMPORTANT findings?              │
+   │          │                                            │
+   │          ├── No → Step 7 (return summary)             │
+   │          │                                            │
+   │          └── Yes ─▼                                   │
+   │                                                       │
+   │  ┌─────────────────────────────────────────────┐      │
+   │  │ Step 6.5: Pattern Extraction (best-effort)  │      │
+   │  │                                             │      │
+   │  │  1. Filter CRITICAL + IMPORTANT findings    │      │
+   │  │                │                            │      │
+   │  │                ▼                            │      │
+   │  │  2. Generalize (remove MR-specific details) │      │
+   │  │                │                            │      │
+   │  │                ▼                            │      │
+   │  │  3. Read/create SKILL.md in project repo    │      │
+   │  │                │                            │      │
+   │  │                ▼                            │      │
+   │  │  4. Deduplicate (30 entry cap)              │      │
+   │  │                │                            │      │
+   │  │                ▼                            │      │
+   │  │  5. MR already merged?                      │      │
+   │  │     ├── Yes → SKIP worktree (patterns       │      │
+   │  │     │         would never reach target)     │      │
+   │  │     └── No  → Commit via worktree           │      │
+   │  │               (see Worktree Flow below)     │      │
+   │  └─────────────────────────────────────────────┘      │
+   │                   │                                   │
+   │                   ▼                                   │
+   │          Any CRITICAL findings?                       │
+   │          │                                            │
+   │          ├── No → Step 7 (return summary)             │
+   │          │                                            │
+   │          └── Yes ─▼                                   │
+   │                                                       │
+   │  ┌─────────────────────────────────────────────┐      │
+   │  │ Step 6.6: GitLab Issues (best-effort)       │      │
+   │  │                                             │      │
+   │  │  For each CRITICAL finding:                 │      │
+   │  │  → mcp__gitlab__create_issue()              │      │
+   │  │  → Labels: peer-review, critical, bug       │      │
+   │  └─────────────────────────────────────────────┘      │
+   │                   │                                   │
+   │                   ▼                                   │
+   │  Step 7: Return summary to command                    │
+   │          • Verdict                                    │
+   │          • Issues found                               │
+   │          • Patterns committed (which branch)          │
+   │          • GitLab issues created                      │
+   │                                                       │
+   └──────────────────────────────────────────────────────-┘
+
+
+
+4. WORKTREE FLOW (Pattern Commit — Step 6.5.7)
+===============================================
+
+Reviewer is actively working on their branch (e.g., Outage-2272)
+with staged, unstaged, and untracked changes.
+This flow runs in the BACKGROUND — zero interference.
+
+
+   ╔═════════════════════════════════════════════════════╗
+   ║ 0. PRE-CHECK: MR already merged?                   ║
+   ║                                                     ║
+   ║    Yes → SKIP entire worktree flow                  ║
+   ║          (branch may be deleted, commit would       ║
+   ║           never reach target branch)                ║
+   ╚══════════════════════╤══════════════════════════════╝
+                          │ Not merged — proceed
+                          ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 1. Create temp worktree                             │
+   │    git worktree add /tmp/shipit-peer-review-...     │
+   │    on MR source branch (e.g., outage-2312)          │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 2. Pull latest                                      │
+   │    cd /tmp/shipit-... && git pull origin outage-2312 │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 3. Write SKILL.md in worktree directory             │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ╔═════════════════════════════════════════════════════╗
+   ║ 4. SAFETY CHECK #1                                 ║
+   ║    git status --porcelain                          ║
+   ║    Only SKILL.md changed?                          ║
+   ║                                                    ║
+   ║    Other files? → ABORT, clean up worktree         ║
+   ╚════════════════════════╤════════════════════════════╝
+                            │ Only SKILL.md
+                            ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 5. git add .claude/skills/pr-review-patterns/SKILL.md│
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ╔═════════════════════════════════════════════════════╗
+   ║ 6. SAFETY CHECK #2                                 ║
+   ║    git diff --cached --name-only                   ║
+   ║    Only SKILL.md staged?                           ║
+   ║                                                    ║
+   ║    Other files? → git reset HEAD, ABORT, clean up  ║
+   ╚════════════════════════╤════════════════════════════╝
+                            │ Only SKILL.md
+                            ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 7. git commit -m "chore: update pr-review patterns  │
+   │    from peer review of <TICKET_KEY>"                │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 8. git push origin outage-2312                      │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+   ┌─────────────────────────────────────────────────────┐
+   │ 9. git worktree remove (cleanup temp directory)     │
+   └──────────────────────┬──────────────────────────────┘
+                          │
+                          ▼
+                  ✅ Patterns on MR branch
+                  Ready to merge with dev
+
+
+   Meanwhile, reviewer's directory:
+
+   ┌─────────────────────────────────────────────────────┐
+   │ Outage-2272 (reviewer's branch)                     │
+   │                                                     │
+   │  staged files    → still staged        ✅            │
+   │  unstaged edits  → still unstaged      ✅            │
+   │  untracked files → still there         ✅            │
+   │  active editing  → never interrupted   ✅            │
+   │                                                     │
+   │  NOTHING TOUCHED. ZERO INTERFERENCE.                │
+   └─────────────────────────────────────────────────────┘
+
+
+
+5. HOW PATTERNS MERGE INTO TARGET BRANCH
+=========================================
+
+   outage-2312 (MR source branch):
+
+   ──A──B──C──D──[pattern commit]──
+                       │
+                       │  (this is just another commit on the branch)
+                       │
+                       ▼
+   MR: outage-2312 → dev
+                       │
+                       │  (when MR merges, ALL commits merge)
+                       │
+                       ▼
+   dev:
+   ──X──Y──Z──[merge commit]──
+                  │
+                  └── includes pattern commit ✅
+
+
+
+6. SYSTEM DEPENDENCIES
+=======================
+
+   ┌──────────────────────┐
+   │ /shipit:peer-review  │
+   │      (command)        │
+   └───────────┬──────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+       ▼                ▼
+   ┌────────┐    ┌───────────┐
+   │  Jira  │    │  GitLab   │
+   │  MCP   │    │  MCP      │
+   │        │    │ (list MRs)│
+   └────────┘    └───────────┘
+               │
+          spawns│
+               ▼
+   ┌───────────────────────────────────────────┐
+   │          shipit-peer-reviewer              │
+   │                                            │
+   │  ┌──────────┐  ┌──────────────────────┐   │
+   │  │ GitLab   │  │ pr-review-toolkit    │   │
+   │  │ MCP      │──│ (5 sub-agents)       │   │
+   │  │(diff)    │  └──────────────────────┘   │
+   │  └──────────┘                              │
+   │  ┌──────────┐  ┌──────────────────────┐   │
+   │  │ GitLab   │  │ Git Worktree         │   │
+   │  │ MCP      │  │ (/tmp/ isolation)    │   │
+   │  │(comments)│  │ commit + push        │   │
+   │  └──────────┘  └──────────────────────┘   │
+   │  ┌──────────┐  ┌──────────────────────┐   │
+   │  │ GitLab   │  │ GitLab MCP           │   │
+   │  │ MCP      │  │ (create issues for   │   │
+   │  │(approve) │  │  CRITICAL findings)  │   │
+   │  └──────────┘  └──────────────────────┘   │
+   └───────────────────────────────────────────┘
+
+
+
+7. ERROR RECOVERY
+==================
+
+   Any step fails in worktree?
+        │
+        ▼
+   ┌─────────────────────────────────┐
+   │ Recovery:                       │
+   │  1. cd /                        │
+   │  2. git worktree remove --force │
+   │  3. Continue to next step       │
+   │                                 │
+   │ Pattern commit = best-effort    │
+   │ Review = never blocked          │
+   │ Reviewer's files = never touched│
+   └─────────────────────────────────┘
+
+   ┌─────────────────────────────────────────────────┐
+   │ Error                    │ Response              │
+   ├─────────────────────────-┼───────────────────────│
+   │ git fetch fails          │ HARD GATE → stop      │
+   │ MR not found (404)       │ Error → stop          │
+   │ Review toolkit fails     │ Fallback to manual    │
+   │ MR already merged        │ Skip worktree entirely│
+   │ Worktree creation fails  │ Skip patterns         │
+   │ Unexpected files changed │ Abort commit, cleanup  │
+   │ Push fails               │ Cleanup worktree      │
+   │ GitLab issue fails       │ Log warning, continue │
+   └─────────────────────────-┴───────────────────────┘
+
+
+================================================================================
+  Key Principle: Nothing blocks the review. Nothing touches reviewer's files.
+================================================================================

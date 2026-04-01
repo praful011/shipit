@@ -23,6 +23,9 @@ Before reviewing, load context:
 **Input from command:** You will receive:
 - `Merge Request URL` — the GitLab MR to review
 - `Jira Ticket Key` — the originating Jira ticket for context
+- `MR Source Branch` — the branch the MR was created from (for pattern commits)
+- `MR Target Branch` — the branch the MR targets (e.g., dev, main)
+- `GitLab Project Path` — the GitLab project path (e.g., group/project)
 </project_context>
 
 <process>
@@ -196,16 +199,123 @@ Each entry format:
   _Prevention:_ <actionable prevention rule>
 ```
 
-### 6.5.7: Commit Locally
+### 6.5.7: Commit on MR Source Branch and Push (via Worktree)
 
-Commit the skill file change locally (do NOT push):
+**PRE-CHECK: Is the MR already merged?**
+
+Before starting the worktree process, check the MR state from the metadata fetched in Step 2:
 
 ```bash
-git add .claude/skills/pr-review-patterns/SKILL.md
-git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
+# MR_STATE was captured in Step 2 from GitLab MCP response
+if [ "$MR_STATE" = "merged" ]; then
+  echo "MR already merged — skipping pattern commit. Patterns would not reach target branch."
+  # Skip entire worktree flow, continue to Step 6.6
+fi
 ```
 
-The user will push when ready. Do NOT run `git push`.
+**Why skip:** If the MR is already merged, the source branch may be deleted or stale. Pushing to it would either fail or create an orphaned commit that never merges into the target branch. The patterns would be wasted. Log a note and move on.
+
+---
+
+**CRITICAL:** Pattern commits MUST go on the MR's source branch (the branch being reviewed), NOT on the reviewer's current branch. This ensures the patterns merge with the target branch (e.g., dev) when the MR is merged.
+
+**SAFETY: The reviewer may be actively working** — editing files, running tests, staging changes — while this review runs in the background. We MUST NOT touch the reviewer's working directory at all. No `git checkout`, no `git stash`, no branch switching.
+
+**Solution: `git worktree`** — creates a temporary second working directory on the MR source branch, completely isolated from the reviewer's main working directory. The reviewer's branch, staged files, unstaged changes, and untracked files are never touched.
+
+1. **Create a temporary worktree on the MR source branch:**
+   ```bash
+   WORKTREE_DIR="/tmp/shipit-peer-review-$(date +%s)"
+   git worktree add "$WORKTREE_DIR" <MR_SOURCE_BRANCH>
+   ```
+   This checks out `<MR_SOURCE_BRANCH>` into a separate directory. The reviewer's working directory is completely untouched — they can keep editing, staging, committing on their own branch.
+
+2. **Pull latest changes in the worktree:**
+   ```bash
+   cd "$WORKTREE_DIR"
+   git pull origin <MR_SOURCE_BRANCH>
+   ```
+
+3. **Write the patterns skill file in the worktree:**
+   ```bash
+   mkdir -p "$WORKTREE_DIR/.claude/skills/pr-review-patterns"
+   ```
+   Write the updated SKILL.md to `$WORKTREE_DIR/.claude/skills/pr-review-patterns/SKILL.md`.
+
+4. **Verify ONLY the skill file is changed (safety check):**
+   ```bash
+   cd "$WORKTREE_DIR"
+   CHANGED_FILES=$(git status --porcelain)
+   SKILL_ONLY=$(echo "$CHANGED_FILES" | grep -v '.claude/skills/pr-review-patterns/SKILL.md')
+   if [ -n "$SKILL_ONLY" ]; then
+     echo "WARNING: Unexpected file changes detected in worktree. Aborting commit."
+     echo "$SKILL_ONLY"
+     # Skip commit — something unexpected changed
+     cd /
+     git worktree remove "$WORKTREE_DIR" --force
+     # Exit step, continue to Step 6.6
+   fi
+   ```
+   **HARD GUARD:** If ANY file other than `SKILL.md` shows as changed, abort the commit entirely. This prevents accidentally committing unintended files.
+
+5. **Stage ONLY the skill file and commit:**
+   ```bash
+   cd "$WORKTREE_DIR"
+   git add .claude/skills/pr-review-patterns/SKILL.md
+   # Double-check: verify only our file is staged
+   STAGED=$(git diff --cached --name-only)
+   if [ "$STAGED" != ".claude/skills/pr-review-patterns/SKILL.md" ]; then
+     echo "WARNING: More than SKILL.md staged. Aborting."
+     git reset HEAD
+     cd /
+     git worktree remove "$WORKTREE_DIR" --force
+     # Exit step, continue to Step 6.6
+   fi
+   git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
+   ```
+
+6. **Push from the worktree:**
+   ```bash
+   cd "$WORKTREE_DIR"
+   git push origin <MR_SOURCE_BRANCH>
+   ```
+
+7. **Clean up the temporary worktree:**
+   ```bash
+   cd /   # leave the worktree directory first
+   git worktree remove "$WORKTREE_DIR" --force
+   ```
+
+**How this merges into the target branch (e.g., dev):**
+```
+outage-2312 (MR source branch):
+  commit A ── commit B ── commit C ── [pattern commit] ← we push here
+                                           │
+                                           ▼
+  MR: outage-2312 → dev   (pattern commit is now part of this MR)
+                                           │
+                                           ▼
+  dev: ... ── merge commit  (patterns flow into dev when MR merges) ✓
+```
+The worktree commit lands on `origin/outage-2312` — the exact branch the MR is from. When the MR merges into `dev`, our commit is included. No extra step needed.
+
+**Why worktree instead of stash/checkout:**
+
+| Approach | Problem |
+|----------|---------|
+| `git stash + checkout` | Disrupts reviewer's working directory. If review runs in background, user loses active edits mid-keystroke. |
+| `git stash` two-layer | Preserves staged/unstaged state but still blocks the reviewer — can't edit files while stashed. |
+| **`git worktree`** | **Zero interference.** Separate directory, separate checkout. Reviewer keeps working, review keeps running. Both are independent. |
+
+**What the reviewer sees:** Nothing. Their branch, staged files, unstaged changes, untracked files — all completely untouched. The worktree is created in `/tmp/`, operates independently, and is cleaned up after.
+
+**Error handling:** If any step fails (worktree creation, push, etc.), clean up and skip:
+```bash
+# Recovery block — runs if ANY step above fails
+cd /
+git worktree remove "$WORKTREE_DIR" --force 2>/dev/null
+```
+Pattern commits are best-effort — never block the review, never interfere with the reviewer's work.
 
 ### Skill File Template
 
@@ -240,6 +350,33 @@ _No patterns yet._
 _No patterns yet._
 ```
 
+## Step 6.6: Create GitLab Issues for CRITICAL Findings (Best-Effort)
+
+After the review is complete, create GitLab issues for any **CRITICAL** findings so they are formally tracked and cannot be missed.
+
+**This step is best-effort.** If issue creation fails, log a warning and continue to Step 7.
+
+### When to Run
+
+Only run this step if the review found **at least one CRITICAL issue**. IMPORTANT and MINOR issues do not warrant GitLab issues — MR comments are sufficient.
+
+### 6.6.1: Create One Issue Per CRITICAL Finding
+
+For each CRITICAL finding, create a GitLab issue in the same project as the MR:
+
+```
+mcp__gitlab__create_issue(
+  project_id: "<GITLAB_PROJECT_PATH>",
+  title: "[Peer Review] CRITICAL: <short description>",
+  description: "## Critical Issue Found in Peer Review\n\n**Source:** Peer review of MR !<MR_IID> (<TICKET_KEY>)\n**Severity:** CRITICAL\n**Category:** <category>\n\n### Description\n\n<detailed description of the issue>\n\n### File & Location\n\n`<file:line>` (from MR !<MR_IID>)\n\n### Suggested Fix\n\n<prevention/fix guidance>\n\n---\n_Created automatically by ShipIt peer-review agent_",
+  labels: "peer-review,critical,bug"
+)
+```
+
+### 6.6.2: Report Created Issues
+
+Include the created issue URLs in the review summary returned in Step 7.
+
 ## Step 7: Return Summary
 
 Return a structured summary to the calling command:
@@ -269,12 +406,21 @@ Return a structured summary to the calling command:
 - **Author:** <MR author>
 - **Verdict:** APPROVED | CHANGES REQUESTED
 - **Action:** Approved MR | Posted N comments, requested changes
+- **Patterns Committed:** Yes (pushed to <SOURCE_BRANCH>) | No (no CRITICAL/IMPORTANT findings)
 
 ### Issues Found
 
 | # | Severity | Category | Description | File:Line |
 |---|----------|----------|-------------|-----------|
 | 1 | CRITICAL/IMPORTANT/MINOR | <category> | <description> | <file:line> |
+
+### GitLab Issues Created
+
+| # | Issue | Severity | Description |
+|---|-------|----------|-------------|
+| 1 | <issue_url> | CRITICAL | <description> |
+
+(Only shown if CRITICAL issues were found and GitLab issues created)
 
 ### Review Summary
 <2-3 sentence summary of the review findings and overall code quality>
@@ -313,5 +459,7 @@ Handle these failure modes gracefully:
 - [ ] Existing duplicate patterns cleaned up (cross-reviewer duplicates removed)
 - [ ] New patterns deduplicated against ALL existing entries (cross-reviewer)
 - [ ] Skill file written to project repo at `.claude/skills/pr-review-patterns/SKILL.md` (if patterns found)
-- [ ] Changes committed locally (not pushed)
+- [ ] Patterns committed on MR source branch (NOT reviewer's branch) and pushed
+- [ ] Reviewer switched back to their original branch after commit
+- [ ] GitLab issues created for CRITICAL findings (best-effort)
 </success_criteria>
