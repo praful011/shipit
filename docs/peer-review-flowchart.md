@@ -104,7 +104,7 @@ flowchart TD
         P2["Generalize patterns\n(remove MR-specific details)"]
         P3["Read/create\nSKILL.md in project"]
         P4["Deduplicate\n(30 entry cap)"]
-        P5["Create temp worktree\non MR source branch\ncommit + push + cleanup"]
+        P5["Commit via worktree\n(see Worktree Flow)"]
         P1 --> P2 --> P3 --> P4 --> P5
     end
 
@@ -131,7 +131,43 @@ flowchart TD
     style END fill:#4CAF50,color:#fff
 ```
 
-## Branch Strategy (Pattern Commits)
+## Worktree Flow (Pattern Commit — Step 6.5.7)
+
+```mermaid
+flowchart TD
+    START["Start: Need to commit\nSKILL.md on MR source branch"] --> CREATE["1. Create temp worktree\ngit worktree add /tmp/shipit-...\non MR source branch"]
+
+    CREATE --> PULL["2. Pull latest\ngit pull origin outage-2312"]
+    PULL --> WRITE["3. Write SKILL.md\nin worktree directory"]
+
+    WRITE --> CHECK_STATUS{"4. Safety Check:\ngit status --porcelain\nOnly SKILL.md changed?"}
+
+    CHECK_STATUS -->|"Other files changed"| ABORT_1[/"ABORT: Unexpected changes\nClean up worktree\nSkip pattern commit"/]
+    CHECK_STATUS -->|"Only SKILL.md"| STAGE["5. git add SKILL.md"]
+
+    STAGE --> CHECK_STAGED{"Safety Check:\ngit diff --cached --name-only\nOnly SKILL.md staged?"}
+
+    CHECK_STAGED -->|"Other files staged"| ABORT_2[/"ABORT: git reset HEAD\nClean up worktree\nSkip pattern commit"/]
+    CHECK_STAGED -->|"Only SKILL.md"| COMMIT["6. git commit\n'chore: update pr-review\npatterns from TICKET_KEY'"]
+
+    COMMIT --> PUSH["7. git push origin\noutage-2312"]
+    PUSH --> CLEANUP["8. git worktree remove\n(delete temp directory)"]
+    CLEANUP --> DONE(["Done ✓\nPatterns on MR branch"])
+
+    ABORT_1 --> CLEANUP_ERR["Clean up worktree"]
+    ABORT_2 --> CLEANUP_ERR
+    CLEANUP_ERR --> SKIP(["Skipped\n(best-effort, non-blocking)"])
+
+    style START fill:#2196F3,color:#fff
+    style DONE fill:#4CAF50,color:#fff
+    style SKIP fill:#FF9800,color:#fff
+    style ABORT_1 fill:#f44336,color:#fff
+    style ABORT_2 fill:#f44336,color:#fff
+    style CHECK_STATUS fill:#9C27B0,color:#fff
+    style CHECK_STAGED fill:#9C27B0,color:#fff
+```
+
+## Branch Strategy (Sequence)
 
 ```mermaid
 sequenceDiagram
@@ -141,20 +177,39 @@ sequenceDiagram
     participant T as Target Branch<br/>(e.g. dev)
 
     Note over R: Reviewer is actively working<br/>staged + unstaged + untracked changes<br/>editing files, running tests...
-    
+
     rect rgb(230, 245, 255)
         Note over W: Worktree operates in /tmp/<br/>completely isolated from reviewer
         W->>W: 1. git worktree add /tmp/...<br/>outage-2312
         W->>W: 2. git pull origin outage-2312
         W->>W: 3. Write SKILL.md patterns
-        W->>W: 4. git add + commit
-        W->>O: 5. git push origin outage-2312
-        W->>W: 6. git worktree remove (cleanup)
+        W->>W: 4. Safety: verify ONLY<br/>SKILL.md changed
+        W->>W: 5. Safety: verify ONLY<br/>SKILL.md staged
+        W->>W: 6. git commit
+        W->>O: 7. git push origin outage-2312
+        W->>W: 8. git worktree remove (cleanup)
     end
 
     Note over R: Reviewer's work UNTOUCHED<br/>staged = still staged ✓<br/>unstaged = still unstaged ✓<br/>untracked = still there ✓<br/>no interruption at all ✓
-    
+
     O-->>T: MR merges → patterns<br/>flow into dev ✓
+```
+
+## How Patterns Merge Into Target Branch
+
+```mermaid
+gitGraph
+    commit id: "A"
+    commit id: "B"
+    branch outage-2312
+    checkout outage-2312
+    commit id: "feature work"
+    commit id: "more work"
+    commit id: "bug fix"
+    commit id: "chore: update pr-review patterns" type: HIGHLIGHT
+    checkout main
+    merge outage-2312 id: "MR merges → patterns included ✓"
+    commit id: "continues..."
 ```
 
 ## System Dependencies
@@ -175,8 +230,8 @@ graph LR
         TOOLKIT["pr-review-toolkit\n(5 sub-agents)"]
         GL_COMMENT["GitLab MCP\n(post comments)"]
         GL_APPROVE["GitLab MCP\n(approve/reject)"]
+        WORKTREE["Git Worktree\n(/tmp/ isolation)"]
         GL_ISSUE["GitLab MCP\n(create issues)"]
-        GIT["Git\n(branch + push)"]
     end
 
     CMD -->|Jira flow| JIRA
@@ -185,11 +240,32 @@ graph LR
     GL_DIFF --> TOOLKIT
     TOOLKIT --> GL_COMMENT
     GL_COMMENT --> GL_APPROVE
-    GL_APPROVE --> GIT
-    GIT --> GL_ISSUE
+    GL_APPROVE --> WORKTREE
+    WORKTREE --> GL_ISSUE
 
     style CMD fill:#4CAF50,color:#fff
     style TOOLKIT fill:#2196F3,color:#fff
     style JIRA fill:#FF9800,color:#fff
     style GL_SRC fill:#FF9800,color:#fff
+    style WORKTREE fill:#9C27B0,color:#fff
+```
+
+## Error Recovery
+
+```mermaid
+flowchart TD
+    ANY_STEP["Any step in worktree fails"] --> RECOVER["Recovery block runs"]
+    RECOVER --> CD["cd / (leave worktree dir)"]
+    CD --> REMOVE["git worktree remove --force"]
+    REMOVE --> CONTINUE["Continue to next step\n(pattern commit is best-effort)"]
+
+    REVIEW_FAIL["Review toolkit fails"] --> FALLBACK["Fall back to manual\ncode-review skill patterns"]
+    GITLAB_ISSUE_FAIL["GitLab issue creation fails"] --> LOG_WARN["Log warning, continue"]
+    PUSH_FAIL["Git push fails"] --> CLEANUP["Clean up worktree, skip"]
+
+    Note1["Key principle:\nNothing blocks the review.\nNothing touches reviewer's files."]
+
+    style ANY_STEP fill:#f44336,color:#fff
+    style CONTINUE fill:#4CAF50,color:#fff
+    style Note1 fill:#fff3e0,color:#333
 ```
