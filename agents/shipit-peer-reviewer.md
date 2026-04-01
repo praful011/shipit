@@ -201,6 +201,22 @@ Each entry format:
 
 ### 6.5.7: Commit on MR Source Branch and Push (via Worktree)
 
+**PRE-CHECK: Is the MR already merged?**
+
+Before starting the worktree process, check the MR state from the metadata fetched in Step 2:
+
+```bash
+# MR_STATE was captured in Step 2 from GitLab MCP response
+if [ "$MR_STATE" = "merged" ]; then
+  echo "MR already merged — skipping pattern commit. Patterns would not reach target branch."
+  # Skip entire worktree flow, continue to Step 6.6
+fi
+```
+
+**Why skip:** If the MR is already merged, the source branch may be deleted or stale. Pushing to it would either fail or create an orphaned commit that never merges into the target branch. The patterns would be wasted. Log a note and move on.
+
+---
+
 **CRITICAL:** Pattern commits MUST go on the MR's source branch (the branch being reviewed), NOT on the reviewer's current branch. This ensures the patterns merge with the target branch (e.g., dev) when the MR is merged.
 
 **SAFETY: The reviewer may be actively working** — editing files, running tests, staging changes — while this review runs in the background. We MUST NOT touch the reviewer's working directory at all. No `git checkout`, no `git stash`, no branch switching.
