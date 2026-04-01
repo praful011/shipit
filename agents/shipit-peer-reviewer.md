@@ -203,36 +203,68 @@ Each entry format:
 
 **CRITICAL:** Pattern commits MUST go on the MR's source branch (the branch being reviewed), NOT on the reviewer's current branch. This ensures the patterns merge with the target branch (e.g., dev) when the MR is merged.
 
+**SAFETY: Protect the reviewer's local changes.** The reviewer may have 4-5 uncommitted file changes on their branch. Without protection, those changes would either block the checkout or silently carry over to the wrong branch. Always stash first.
+
 1. **Save the reviewer's current branch:**
    ```bash
    REVIEWER_BRANCH=$(git rev-parse --abbrev-ref HEAD)
    ```
 
-2. **Switch to the MR source branch:**
+2. **Stash any local changes (staged + unstaged + untracked):**
+   ```bash
+   HAS_CHANGES=$(git status --porcelain)
+   if [ -n "$HAS_CHANGES" ]; then
+     git stash push -u -m "shipit-peer-review: auto-stash before branch switch"
+     STASHED=true
+   else
+     STASHED=false
+   fi
+   ```
+   The `-u` flag includes untracked files. This ensures ALL local work is safely stored before switching branches.
+
+3. **Switch to the MR source branch:**
    ```bash
    git checkout <MR_SOURCE_BRANCH>
    git pull origin <MR_SOURCE_BRANCH>
    ```
 
-3. **Stage and commit the patterns:**
+4. **Stage and commit the patterns:**
    ```bash
    git add .claude/skills/pr-review-patterns/SKILL.md
    git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
    ```
 
-4. **Push the commit so it's included in the MR:**
+5. **Push the commit so it's included in the MR:**
    ```bash
    git push origin <MR_SOURCE_BRANCH>
    ```
 
-5. **Switch back to the reviewer's original branch:**
+6. **Switch back to the reviewer's original branch:**
    ```bash
    git checkout "$REVIEWER_BRANCH"
    ```
 
+7. **Restore the reviewer's local changes:**
+   ```bash
+   if [ "$STASHED" = "true" ]; then
+     git stash pop
+   fi
+   ```
+   This restores all uncommitted work exactly as it was before the review.
+
+**Why stash is mandatory:** Without stashing, `git checkout` with dirty working tree either (a) fails if changes conflict with the target branch, or (b) silently carries uncommitted files to the wrong branch — both are dangerous. Stashing guarantees the reviewer's work is untouched.
+
 **Why this approach:** The reviewer may be on their own branch (e.g., `Outage-2272`) while reviewing an MR from `outage-2312` targeting `dev`. Committing on the reviewer's branch would strand the patterns. Committing on `outage-2312` means the patterns flow into `dev` when the MR merges.
 
-**Error handling:** If the checkout or push fails (dirty working tree, auth error), log a warning and skip. Pattern commits are best-effort — never block the review.
+**Error handling:** If any step fails (stash, checkout, push), restore the reviewer's state and skip pattern commit:
+```bash
+# Recovery block — runs if ANY step above fails
+git checkout "$REVIEWER_BRANCH" 2>/dev/null
+if [ "$STASHED" = "true" ]; then
+  git stash pop 2>/dev/null
+fi
+```
+Pattern commits are best-effort — never block the review, never lose the reviewer's work.
 
 ### Skill File Template
 
