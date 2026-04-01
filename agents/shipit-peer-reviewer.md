@@ -23,6 +23,9 @@ Before reviewing, load context:
 **Input from command:** You will receive:
 - `Merge Request URL` — the GitLab MR to review
 - `Jira Ticket Key` — the originating Jira ticket for context
+- `MR Source Branch` — the branch the MR was created from (for pattern commits)
+- `MR Target Branch` — the branch the MR targets (e.g., dev, main)
+- `GitLab Project Path` — the GitLab project path (e.g., group/project)
 </project_context>
 
 <process>
@@ -196,16 +199,40 @@ Each entry format:
   _Prevention:_ <actionable prevention rule>
 ```
 
-### 6.5.7: Commit Locally
+### 6.5.7: Commit on MR Source Branch and Push
 
-Commit the skill file change locally (do NOT push):
+**CRITICAL:** Pattern commits MUST go on the MR's source branch (the branch being reviewed), NOT on the reviewer's current branch. This ensures the patterns merge with the target branch (e.g., dev) when the MR is merged.
 
-```bash
-git add .claude/skills/pr-review-patterns/SKILL.md
-git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
-```
+1. **Save the reviewer's current branch:**
+   ```bash
+   REVIEWER_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+   ```
 
-The user will push when ready. Do NOT run `git push`.
+2. **Switch to the MR source branch:**
+   ```bash
+   git checkout <MR_SOURCE_BRANCH>
+   git pull origin <MR_SOURCE_BRANCH>
+   ```
+
+3. **Stage and commit the patterns:**
+   ```bash
+   git add .claude/skills/pr-review-patterns/SKILL.md
+   git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
+   ```
+
+4. **Push the commit so it's included in the MR:**
+   ```bash
+   git push origin <MR_SOURCE_BRANCH>
+   ```
+
+5. **Switch back to the reviewer's original branch:**
+   ```bash
+   git checkout "$REVIEWER_BRANCH"
+   ```
+
+**Why this approach:** The reviewer may be on their own branch (e.g., `Outage-2272`) while reviewing an MR from `outage-2312` targeting `dev`. Committing on the reviewer's branch would strand the patterns. Committing on `outage-2312` means the patterns flow into `dev` when the MR merges.
+
+**Error handling:** If the checkout or push fails (dirty working tree, auth error), log a warning and skip. Pattern commits are best-effort — never block the review.
 
 ### Skill File Template
 
@@ -240,6 +267,33 @@ _No patterns yet._
 _No patterns yet._
 ```
 
+## Step 6.6: Create GitLab Issues for CRITICAL Findings (Best-Effort)
+
+After the review is complete, create GitLab issues for any **CRITICAL** findings so they are formally tracked and cannot be missed.
+
+**This step is best-effort.** If issue creation fails, log a warning and continue to Step 7.
+
+### When to Run
+
+Only run this step if the review found **at least one CRITICAL issue**. IMPORTANT and MINOR issues do not warrant GitLab issues — MR comments are sufficient.
+
+### 6.6.1: Create One Issue Per CRITICAL Finding
+
+For each CRITICAL finding, create a GitLab issue in the same project as the MR:
+
+```
+mcp__gitlab__create_issue(
+  project_id: "<GITLAB_PROJECT_PATH>",
+  title: "[Peer Review] CRITICAL: <short description>",
+  description: "## Critical Issue Found in Peer Review\n\n**Source:** Peer review of MR !<MR_IID> (<TICKET_KEY>)\n**Severity:** CRITICAL\n**Category:** <category>\n\n### Description\n\n<detailed description of the issue>\n\n### File & Location\n\n`<file:line>` (from MR !<MR_IID>)\n\n### Suggested Fix\n\n<prevention/fix guidance>\n\n---\n_Created automatically by ShipIt peer-review agent_",
+  labels: "peer-review,critical,bug"
+)
+```
+
+### 6.6.2: Report Created Issues
+
+Include the created issue URLs in the review summary returned in Step 7.
+
 ## Step 7: Return Summary
 
 Return a structured summary to the calling command:
@@ -269,12 +323,21 @@ Return a structured summary to the calling command:
 - **Author:** <MR author>
 - **Verdict:** APPROVED | CHANGES REQUESTED
 - **Action:** Approved MR | Posted N comments, requested changes
+- **Patterns Committed:** Yes (pushed to <SOURCE_BRANCH>) | No (no CRITICAL/IMPORTANT findings)
 
 ### Issues Found
 
 | # | Severity | Category | Description | File:Line |
 |---|----------|----------|-------------|-----------|
 | 1 | CRITICAL/IMPORTANT/MINOR | <category> | <description> | <file:line> |
+
+### GitLab Issues Created
+
+| # | Issue | Severity | Description |
+|---|-------|----------|-------------|
+| 1 | <issue_url> | CRITICAL | <description> |
+
+(Only shown if CRITICAL issues were found and GitLab issues created)
 
 ### Review Summary
 <2-3 sentence summary of the review findings and overall code quality>
@@ -313,5 +376,7 @@ Handle these failure modes gracefully:
 - [ ] Existing duplicate patterns cleaned up (cross-reviewer duplicates removed)
 - [ ] New patterns deduplicated against ALL existing entries (cross-reviewer)
 - [ ] Skill file written to project repo at `.claude/skills/pr-review-patterns/SKILL.md` (if patterns found)
-- [ ] Changes committed locally (not pushed)
+- [ ] Patterns committed on MR source branch (NOT reviewer's branch) and pushed
+- [ ] Reviewer switched back to their original branch after commit
+- [ ] GitLab issues created for CRITICAL findings (best-effort)
 </success_criteria>
