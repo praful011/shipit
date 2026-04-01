@@ -199,78 +199,69 @@ Each entry format:
   _Prevention:_ <actionable prevention rule>
 ```
 
-### 6.5.7: Commit on MR Source Branch and Push
+### 6.5.7: Commit on MR Source Branch and Push (via Worktree)
 
 **CRITICAL:** Pattern commits MUST go on the MR's source branch (the branch being reviewed), NOT on the reviewer's current branch. This ensures the patterns merge with the target branch (e.g., dev) when the MR is merged.
 
-**SAFETY: Protect the reviewer's local changes.** The reviewer may have 4-5 uncommitted file changes on their branch. Without protection, those changes would either block the checkout or silently carry over to the wrong branch. Always stash first.
+**SAFETY: The reviewer may be actively working** — editing files, running tests, staging changes — while this review runs in the background. We MUST NOT touch the reviewer's working directory at all. No `git checkout`, no `git stash`, no branch switching.
 
-1. **Save the reviewer's current branch:**
+**Solution: `git worktree`** — creates a temporary second working directory on the MR source branch, completely isolated from the reviewer's main working directory. The reviewer's branch, staged files, unstaged changes, and untracked files are never touched.
+
+1. **Create a temporary worktree on the MR source branch:**
    ```bash
-   REVIEWER_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+   WORKTREE_DIR="/tmp/shipit-peer-review-$(date +%s)"
+   git worktree add "$WORKTREE_DIR" <MR_SOURCE_BRANCH>
    ```
+   This checks out `<MR_SOURCE_BRANCH>` into a separate directory. The reviewer's working directory is completely untouched — they can keep editing, staging, committing on their own branch.
 
-2. **Stash any local changes (staged + unstaged + untracked):**
+2. **Pull latest changes in the worktree:**
    ```bash
-   HAS_CHANGES=$(git status --porcelain)
-   if [ -n "$HAS_CHANGES" ]; then
-     git stash push -u --keep-index -m "shipit-peer-review: unstaged+untracked"
-     git stash push -m "shipit-peer-review: staged changes"
-     STASHED=true
-   else
-     STASHED=false
-   fi
-   ```
-   **Why two stashes:** A single `git stash pop` loses the staged/unstaged distinction — everything comes back as unstaged. By stashing in two layers (staged separately from unstaged+untracked), we can restore the exact state.
-   
-   - `--keep-index` stashes unstaged and untracked files while leaving staged files in the index
-   - Second `git stash push` captures the staged files separately
-
-3. **Switch to the MR source branch:**
-   ```bash
-   git checkout <MR_SOURCE_BRANCH>
+   cd "$WORKTREE_DIR"
    git pull origin <MR_SOURCE_BRANCH>
    ```
 
-4. **Stage and commit the patterns:**
+3. **Write the patterns skill file in the worktree:**
    ```bash
+   mkdir -p "$WORKTREE_DIR/.claude/skills/pr-review-patterns"
+   ```
+   Write the updated SKILL.md to `$WORKTREE_DIR/.claude/skills/pr-review-patterns/SKILL.md`.
+
+4. **Stage and commit in the worktree:**
+   ```bash
+   cd "$WORKTREE_DIR"
    git add .claude/skills/pr-review-patterns/SKILL.md
    git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
    ```
 
-5. **Push the commit so it's included in the MR:**
+5. **Push from the worktree:**
    ```bash
+   cd "$WORKTREE_DIR"
    git push origin <MR_SOURCE_BRANCH>
    ```
 
-6. **Switch back to the reviewer's original branch:**
+6. **Clean up the temporary worktree:**
    ```bash
-   git checkout "$REVIEWER_BRANCH"
+   cd /   # leave the worktree directory first
+   git worktree remove "$WORKTREE_DIR" --force
    ```
 
-7. **Restore the reviewer's local changes (preserving staged/unstaged state):**
-   ```bash
-   if [ "$STASHED" = "true" ]; then
-     git stash pop --index   # restores staged files back as staged
-     git stash pop            # restores unstaged + untracked files
-   fi
-   ```
-   The `--index` flag on the first pop restores staged files **back to staged** (not collapsed to unstaged). The second pop restores the remaining unstaged and untracked files.
+**Why worktree instead of stash/checkout:**
 
-**Why stash is mandatory:** Without stashing, `git checkout` with dirty working tree either (a) fails if changes conflict with the target branch, or (b) silently carries uncommitted files to the wrong branch — both are dangerous. Stashing guarantees the reviewer's work is untouched.
+| Approach | Problem |
+|----------|---------|
+| `git stash + checkout` | Disrupts reviewer's working directory. If review runs in background, user loses active edits mid-keystroke. |
+| `git stash` two-layer | Preserves staged/unstaged state but still blocks the reviewer — can't edit files while stashed. |
+| **`git worktree`** | **Zero interference.** Separate directory, separate checkout. Reviewer keeps working, review keeps running. Both are independent. |
 
-**Why this approach:** The reviewer may be on their own branch (e.g., `Outage-2272`) while reviewing an MR from `outage-2312` targeting `dev`. Committing on the reviewer's branch would strand the patterns. Committing on `outage-2312` means the patterns flow into `dev` when the MR merges.
+**What the reviewer sees:** Nothing. Their branch, staged files, unstaged changes, untracked files — all completely untouched. The worktree is created in `/tmp/`, operates independently, and is cleaned up after.
 
-**Error handling:** If any step fails (stash, checkout, push), restore the reviewer's state and skip pattern commit:
+**Error handling:** If any step fails (worktree creation, push, etc.), clean up and skip:
 ```bash
 # Recovery block — runs if ANY step above fails
-git checkout "$REVIEWER_BRANCH" 2>/dev/null
-if [ "$STASHED" = "true" ]; then
-  git stash pop --index 2>/dev/null  # staged files
-  git stash pop 2>/dev/null           # unstaged + untracked
-fi
+cd /
+git worktree remove "$WORKTREE_DIR" --force 2>/dev/null
 ```
-Pattern commits are best-effort — never block the review, never lose the reviewer's work.
+Pattern commits are best-effort — never block the review, never interfere with the reviewer's work.
 
 ### Skill File Template
 

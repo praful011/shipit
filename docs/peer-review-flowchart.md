@@ -104,7 +104,7 @@ flowchart TD
         P2["Generalize patterns\n(remove MR-specific details)"]
         P3["Read/create\nSKILL.md in project"]
         P4["Deduplicate\n(30 entry cap)"]
-        P5["Commit on MR\nsource branch + push"]
+        P5["Create temp worktree\non MR source branch\ncommit + push + cleanup"]
         P1 --> P2 --> P3 --> P4 --> P5
     end
 
@@ -135,27 +135,25 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant R as Reviewer Branch<br/>(e.g. Outage-2272)
-    participant ST as Git Stash
-    participant S as MR Source Branch<br/>(e.g. outage-2312)
+    participant R as Reviewer's Directory<br/>(e.g. Outage-2272)
+    participant W as Temp Worktree<br/>(/tmp/shipit-peer-review-*)
     participant O as origin/outage-2312
     participant T as Target Branch<br/>(e.g. dev)
 
-    Note over R: Reviewer is on their branch<br/>with staged + unstaged + untracked changes
-    R->>R: 1. Save current branch name
-    R->>ST: 2a. stash push -u --keep-index<br/>(unstaged + untracked)
-    R->>ST: 2b. stash push<br/>(staged files)
-    Note over ST: Two stashes:<br/>top = staged<br/>bottom = unstaged+untracked
-    R->>S: 3. git checkout outage-2312
-    S->>S: git pull origin outage-2312
-    S->>S: Write SKILL.md patterns
-    S->>S: 4. git add + commit
-    S->>O: 5. git push origin outage-2312
-    Note over O: Patterns now<br/>in the MR
-    S->>R: 6. git checkout Outage-2272
-    ST->>R: 7a. stash pop --index<br/>(staged files → back as STAGED)
-    ST->>R: 7b. stash pop<br/>(unstaged + untracked → back as is)
-    Note over R: Back on reviewer's branch<br/>staged files = still staged ✓<br/>unstaged files = still unstaged ✓<br/>untracked files = still untracked ✓
+    Note over R: Reviewer is actively working<br/>staged + unstaged + untracked changes<br/>editing files, running tests...
+    
+    rect rgb(230, 245, 255)
+        Note over W: Worktree operates in /tmp/<br/>completely isolated from reviewer
+        W->>W: 1. git worktree add /tmp/...<br/>outage-2312
+        W->>W: 2. git pull origin outage-2312
+        W->>W: 3. Write SKILL.md patterns
+        W->>W: 4. git add + commit
+        W->>O: 5. git push origin outage-2312
+        W->>W: 6. git worktree remove (cleanup)
+    end
+
+    Note over R: Reviewer's work UNTOUCHED<br/>staged = still staged ✓<br/>unstaged = still unstaged ✓<br/>untracked = still there ✓<br/>no interruption at all ✓
+    
     O-->>T: MR merges → patterns<br/>flow into dev ✓
 ```
 
