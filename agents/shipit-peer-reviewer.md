@@ -226,24 +226,62 @@ Each entry format:
    ```
    Write the updated SKILL.md to `$WORKTREE_DIR/.claude/skills/pr-review-patterns/SKILL.md`.
 
-4. **Stage and commit in the worktree:**
+4. **Verify ONLY the skill file is changed (safety check):**
+   ```bash
+   cd "$WORKTREE_DIR"
+   CHANGED_FILES=$(git status --porcelain)
+   SKILL_ONLY=$(echo "$CHANGED_FILES" | grep -v '.claude/skills/pr-review-patterns/SKILL.md')
+   if [ -n "$SKILL_ONLY" ]; then
+     echo "WARNING: Unexpected file changes detected in worktree. Aborting commit."
+     echo "$SKILL_ONLY"
+     # Skip commit — something unexpected changed
+     cd /
+     git worktree remove "$WORKTREE_DIR" --force
+     # Exit step, continue to Step 6.6
+   fi
+   ```
+   **HARD GUARD:** If ANY file other than `SKILL.md` shows as changed, abort the commit entirely. This prevents accidentally committing unintended files.
+
+5. **Stage ONLY the skill file and commit:**
    ```bash
    cd "$WORKTREE_DIR"
    git add .claude/skills/pr-review-patterns/SKILL.md
+   # Double-check: verify only our file is staged
+   STAGED=$(git diff --cached --name-only)
+   if [ "$STAGED" != ".claude/skills/pr-review-patterns/SKILL.md" ]; then
+     echo "WARNING: More than SKILL.md staged. Aborting."
+     git reset HEAD
+     cd /
+     git worktree remove "$WORKTREE_DIR" --force
+     # Exit step, continue to Step 6.6
+   fi
    git commit -m "chore: update pr-review patterns from peer review of <TICKET_KEY>"
    ```
 
-5. **Push from the worktree:**
+6. **Push from the worktree:**
    ```bash
    cd "$WORKTREE_DIR"
    git push origin <MR_SOURCE_BRANCH>
    ```
 
-6. **Clean up the temporary worktree:**
+7. **Clean up the temporary worktree:**
    ```bash
    cd /   # leave the worktree directory first
    git worktree remove "$WORKTREE_DIR" --force
    ```
+
+**How this merges into the target branch (e.g., dev):**
+```
+outage-2312 (MR source branch):
+  commit A ── commit B ── commit C ── [pattern commit] ← we push here
+                                           │
+                                           ▼
+  MR: outage-2312 → dev   (pattern commit is now part of this MR)
+                                           │
+                                           ▼
+  dev: ... ── merge commit  (patterns flow into dev when MR merges) ✓
+```
+The worktree commit lands on `origin/outage-2312` — the exact branch the MR is from. When the MR merges into `dev`, our commit is included. No extra step needed.
 
 **Why worktree instead of stash/checkout:**
 
