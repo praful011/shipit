@@ -214,13 +214,17 @@ Each entry format:
    ```bash
    HAS_CHANGES=$(git status --porcelain)
    if [ -n "$HAS_CHANGES" ]; then
-     git stash push -u -m "shipit-peer-review: auto-stash before branch switch"
+     git stash push -u --keep-index -m "shipit-peer-review: unstaged+untracked"
+     git stash push -m "shipit-peer-review: staged changes"
      STASHED=true
    else
      STASHED=false
    fi
    ```
-   The `-u` flag includes untracked files. This ensures ALL local work is safely stored before switching branches.
+   **Why two stashes:** A single `git stash pop` loses the staged/unstaged distinction — everything comes back as unstaged. By stashing in two layers (staged separately from unstaged+untracked), we can restore the exact state.
+   
+   - `--keep-index` stashes unstaged and untracked files while leaving staged files in the index
+   - Second `git stash push` captures the staged files separately
 
 3. **Switch to the MR source branch:**
    ```bash
@@ -244,13 +248,14 @@ Each entry format:
    git checkout "$REVIEWER_BRANCH"
    ```
 
-7. **Restore the reviewer's local changes:**
+7. **Restore the reviewer's local changes (preserving staged/unstaged state):**
    ```bash
    if [ "$STASHED" = "true" ]; then
-     git stash pop
+     git stash pop --index   # restores staged files back as staged
+     git stash pop            # restores unstaged + untracked files
    fi
    ```
-   This restores all uncommitted work exactly as it was before the review.
+   The `--index` flag on the first pop restores staged files **back to staged** (not collapsed to unstaged). The second pop restores the remaining unstaged and untracked files.
 
 **Why stash is mandatory:** Without stashing, `git checkout` with dirty working tree either (a) fails if changes conflict with the target branch, or (b) silently carries uncommitted files to the wrong branch — both are dangerous. Stashing guarantees the reviewer's work is untouched.
 
@@ -261,7 +266,8 @@ Each entry format:
 # Recovery block — runs if ANY step above fails
 git checkout "$REVIEWER_BRANCH" 2>/dev/null
 if [ "$STASHED" = "true" ]; then
-  git stash pop 2>/dev/null
+  git stash pop --index 2>/dev/null  # staged files
+  git stash pop 2>/dev/null           # unstaged + untracked
 fi
 ```
 Pattern commits are best-effort — never block the review, never lose the reviewer's work.

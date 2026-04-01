@@ -141,10 +141,11 @@ sequenceDiagram
     participant O as origin/outage-2312
     participant T as Target Branch<br/>(e.g. dev)
 
-    Note over R: Reviewer is on their branch<br/>with 4-5 uncommitted changes
+    Note over R: Reviewer is on their branch<br/>with staged + unstaged + untracked changes
     R->>R: 1. Save current branch name
-    R->>ST: 2. git stash push -u<br/>(staged + unstaged + untracked)
-    Note over ST: Local changes<br/>safely stored
+    R->>ST: 2a. stash push -u --keep-index<br/>(unstaged + untracked)
+    R->>ST: 2b. stash push<br/>(staged files)
+    Note over ST: Two stashes:<br/>top = staged<br/>bottom = unstaged+untracked
     R->>S: 3. git checkout outage-2312
     S->>S: git pull origin outage-2312
     S->>S: Write SKILL.md patterns
@@ -152,8 +153,9 @@ sequenceDiagram
     S->>O: 5. git push origin outage-2312
     Note over O: Patterns now<br/>in the MR
     S->>R: 6. git checkout Outage-2272
-    ST->>R: 7. git stash pop
-    Note over R: Back on reviewer's branch<br/>with all local changes restored ✓
+    ST->>R: 7a. stash pop --index<br/>(staged files → back as STAGED)
+    ST->>R: 7b. stash pop<br/>(unstaged + untracked → back as is)
+    Note over R: Back on reviewer's branch<br/>staged files = still staged ✓<br/>unstaged files = still unstaged ✓<br/>untracked files = still untracked ✓
     O-->>T: MR merges → patterns<br/>flow into dev ✓
 ```
 
