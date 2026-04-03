@@ -191,6 +191,139 @@ After configuring, restart Claude Code and re-run /shipit:peer-qa.
 
 Store which MCP is available as `BROWSER_MCP` ("playwright" or "puppeteer").
 
+## Step 4.5: Authentication Check (Hard Gate)
+
+<CRITICAL_GATE>
+Before executing any test scenarios, check if the target website requires authentication. If it does, you MUST collect credentials from the user before proceeding. Do NOT attempt to test an authenticated site without valid credentials.
+</CRITICAL_GATE>
+
+### 4.5.1: Navigate to the Website and Check for Login
+
+Navigate to the target website URL using the detected browser MCP:
+
+```
+# Playwright
+mcp__playwright__browser_navigate(url: "<WEBSITE_URL>")
+
+# Puppeteer
+mcp__puppeteer__puppeteer_navigate(url: "<WEBSITE_URL>")
+```
+
+Take a screenshot of the landing page and inspect it:
+
+```
+mcp__playwright__browser_screenshot(name: "auth-check-landing")
+```
+
+**Detect authentication requirement** by checking for:
+- Login form (username/password fields, "Sign In" / "Log In" buttons)
+- OAuth/SSO redirect (redirect to an identity provider page)
+- 401/403 error page
+- "Unauthorized" or "Access Denied" messages
+- Protected route redirect (URL changed to `/login`, `/auth`, `/signin`)
+
+### 4.5.2: Request Credentials from User
+
+If authentication IS required, ask the user for credentials:
+
+```
+AskUserQuestion(
+  question: "The website requires authentication. Please provide login credentials.",
+  options: [
+    { label: "Provide credentials", description: "I'll enter username and password to log in" },
+    { label: "Skip authentication", description: "Proceed without login — test only public pages" },
+    { label: "Use SSO/OAuth", description: "I'll complete the login manually in the browser, then you continue testing" }
+  ]
+)
+```
+
+**If "Provide credentials":**
+
+Ask for the actual credentials:
+
+```
+AskUserQuestion(
+  question: "Enter the username/email for login:",
+  options: [
+    { label: "admin", description: "Use admin account" },
+    { label: "test-user", description: "Use test user account" }
+  ]
+)
+```
+
+Then ask for the password:
+
+```
+AskUserQuestion(
+  question: "Enter the password:",
+  options: [
+    { label: "Enter password", description: "I'll type the password in the Other field" }
+  ]
+)
+```
+
+**Note:** The user will type their actual credentials in the "Other" free-text field. Never log, print, or store credentials beyond the current session.
+
+### 4.5.3: Perform Login
+
+Execute the login flow using the browser MCP:
+
+1. **Find and fill username field:**
+   ```
+   mcp__playwright__browser_type(
+     selector: "input[name='username'], input[name='email'], input[type='email'], #username, #email",
+     text: "<USERNAME>"
+   )
+   ```
+
+2. **Find and fill password field:**
+   ```
+   mcp__playwright__browser_type(
+     selector: "input[name='password'], input[type='password'], #password",
+     text: "<PASSWORD>"
+   )
+   ```
+
+3. **Click login button:**
+   ```
+   mcp__playwright__browser_click(
+     selector: "button[type='submit'], input[type='submit'], button:has-text('Sign In'), button:has-text('Log In'), button:has-text('Login')"
+   )
+   ```
+
+4. **Wait for navigation and verify login succeeded:**
+   - Take a screenshot after login attempt
+   - Check if still on login page (login failed) or redirected to dashboard/home (login succeeded)
+   - If login failed: inform the user and ask for corrected credentials (max 2 retries)
+
+**If "Skip authentication":**
+- Proceed to Step 5 but only test publicly accessible pages
+- Note in the QA summary that authenticated features were not tested
+
+**If "Use SSO/OAuth":**
+- Inform the user: "Please complete the login in the browser window. Reply when you're done."
+- Wait for user confirmation via AskUserQuestion
+- Take a screenshot to verify login succeeded
+
+### 4.5.4: Hard Gate — Login Must Succeed for Authenticated Sites
+
+If authentication was required and login failed after 2 retries:
+
+**STOP. Do NOT proceed to Step 5.**
+
+```
+<shipit-blocked>
+Authentication failed after 2 attempts. Cannot proceed with QA testing on a protected website.
+
+Please verify:
+1. The credentials are correct
+2. The account has access to the target environment
+3. There are no MFA/2FA requirements blocking automated login
+
+Re-run /shipit:peer-qa when access is resolved.
+</shipit-blocked>
+```
+
 ## Step 5: Execute Test Scenarios in Browser
 
 For each test scenario, execute the steps using the detected browser MCP:
@@ -413,6 +546,9 @@ Handle these failure modes gracefully:
 | No browser MCP available | **Hard gate.** Auto-setup Playwright MCP (install + configure). If auto-setup fails, STOP and block with setup instructions. |
 | Browser navigation fails | Capture error screenshot, mark scenario as FAIL, continue with remaining scenarios. |
 | Website unreachable | Return error: "Website <URL> is not reachable. Verify the URL and try again." |
+| Authentication required | **Hard gate.** Ask user for credentials. Attempt login. Block after 2 failed retries. |
+| SSO/OAuth detected | Ask user to complete login manually in browser, then continue. |
+| MFA/2FA blocking login | Block and inform user — automated login cannot handle MFA. |
 | Screenshot capture fails | Log warning, continue testing. Note in results that screenshot was not captured for that scenario. |
 | Jira comment posting fails | Log warning, continue. Include results in the return summary so the user has them. |
 | Jira transition fails | Log warning: "Could not transition ticket. Please manually update status." Continue. |
@@ -428,6 +564,9 @@ Handle these failure modes gracefully:
 - [ ] Browser MCP detected at runtime (Playwright preferred, Puppeteer fallback) — HARD GATE
 - [ ] If no MCP found: auto-setup attempted (install Playwright + configure settings)
 - [ ] If auto-setup failed: workflow blocked with manual setup instructions
+- [ ] Authentication check performed on target website — HARD GATE
+- [ ] If login required: credentials collected from user (never stored beyond session)
+- [ ] If login failed after retries: workflow blocked with access instructions
 - [ ] Each test scenario executed in the browser
 - [ ] Screenshot captured for EVERY scenario (mandatory)
 - [ ] Summary table posted as Jira comment

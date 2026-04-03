@@ -63,6 +63,22 @@ User invokes /shipit:peer-qa
    +--------+
         |
         v
+[9c] Check if website requires authentication (HARD GATE)
+        |
+     login needed?
+    /            \
+  no             yes
+   |              |
+   |       Ask user for credentials
+   |       (or SSO/manual login)
+   |              |
+   |          login OK?
+   |         /        \
+   |       yes        no (2 retries) → BLOCKED
+   |        |
+   +--------+
+        |
+        v
 [10] Agent executes each scenario in browser, captures screenshot per scenario
         |
         v
