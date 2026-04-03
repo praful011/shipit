@@ -47,7 +47,36 @@ User invokes /shipit:peer-qa
 [8] Agent generates test scenarios
         |
         v
-[9] Agent detects browser MCP (Playwright preferred, Puppeteer fallback)
+[9] Agent detects browser MCP (HARD GATE — Playwright preferred, Puppeteer fallback)
+        |
+     available?
+    /         \
+  yes          no
+   |            |
+   |     [9b] Auto-setup Playwright
+   |     (install + configure + verify)
+   |            |
+   |         works?
+   |        /      \
+   |      yes      no → BLOCKED (manual setup needed)
+   |        |
+   +--------+
+        |
+        v
+[9c] Check if website requires authentication (HARD GATE)
+        |
+     login needed?
+    /            \
+  no             yes
+   |              |
+   |       Ask user for credentials
+   |       (or SSO/manual login)
+   |              |
+   |          login OK?
+   |         /        \
+   |       yes        no (2 retries) → BLOCKED
+   |        |
+   +--------+
         |
         v
 [10] Agent executes each scenario in browser, captures screenshot per scenario
