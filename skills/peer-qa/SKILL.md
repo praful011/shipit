@@ -47,7 +47,20 @@ User invokes /shipit:peer-qa
 [8] Agent generates test scenarios
         |
         v
-[9] Agent detects browser MCP (Playwright preferred, Puppeteer fallback)
+[9] Agent detects browser MCP (HARD GATE — Playwright preferred, Puppeteer fallback)
+        |
+     available?
+    /         \
+  yes          no
+   |            |
+   |     [9b] Auto-setup Playwright
+   |     (install + configure + verify)
+   |            |
+   |         works?
+   |        /      \
+   |      yes      no → BLOCKED (manual setup needed)
+   |        |
+   +--------+
         |
         v
 [10] Agent executes each scenario in browser, captures screenshot per scenario

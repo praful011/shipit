@@ -91,23 +91,103 @@ Present the test plan as a numbered checklist:
 - Include visual/layout checks if UI was modified
 - Keep scenarios actionable and browser-testable
 
-## Step 4: Detect Browser MCP
+## Step 4: Detect and Setup Browser MCP (Hard Gate)
 
-Detect which browser automation MCP is available at runtime. Try in this order:
+<CRITICAL_GATE>
+A working browser MCP is REQUIRED to proceed. This is a hard gate — do NOT skip it, do NOT proceed to Step 5 without a confirmed working browser MCP.
+
+If no browser MCP is available, you MUST set one up before continuing.
+</CRITICAL_GATE>
+
+### 4.1: Detect Available Browser MCP
+
+Try each browser MCP in order to see which is already configured and working:
 
 1. **Playwright MCP (preferred)** — Check if Playwright browser tools are available:
    ```
    # Try calling a Playwright tool to verify availability
    mcp__playwright__browser_navigate(url: "about:blank")
    ```
+   If this succeeds → set `BROWSER_MCP = "playwright"`, proceed to Step 5.
 
 2. **Puppeteer MCP (fallback)** — If Playwright is not available, try Puppeteer:
    ```
    # Try calling a Puppeteer tool to verify availability
    mcp__puppeteer__puppeteer_navigate(url: "about:blank")
    ```
+   If this succeeds → set `BROWSER_MCP = "puppeteer"`, proceed to Step 5.
 
-If neither browser MCP is available, return an error: "No browser automation MCP available. Please configure Playwright or Puppeteer MCP and try again."
+### 4.2: Auto-Setup if No Browser MCP Available
+
+If NEITHER browser MCP responded in Step 4.1, set up Playwright MCP automatically:
+
+1. **Check if Playwright is installed globally:**
+   ```bash
+   npx @anthropic-ai/mcp-playwright --help 2>/dev/null || echo "NOT_INSTALLED"
+   ```
+
+2. **Install Playwright MCP if not present:**
+   ```bash
+   npm install -g @anthropic-ai/mcp-playwright
+   ```
+
+3. **Install browser binaries (required by Playwright):**
+   ```bash
+   npx playwright install chromium
+   ```
+
+4. **Add Playwright MCP to Claude Code settings:**
+
+   Read the current MCP config and add the Playwright server:
+   ```bash
+   # Check if .claude/settings.json exists in project or home
+   cat ~/.claude/settings.json 2>/dev/null || echo "{}"
+   ```
+
+   Add the Playwright MCP server entry:
+   ```json
+   {
+     "mcpServers": {
+       "playwright": {
+         "command": "npx",
+         "args": ["@anthropic-ai/mcp-playwright"]
+       }
+     }
+   }
+   ```
+
+   Write the updated settings using the appropriate config file location.
+
+5. **Verify the setup works — re-test the MCP:**
+   ```
+   mcp__playwright__browser_navigate(url: "about:blank")
+   ```
+
+   If this succeeds → set `BROWSER_MCP = "playwright"`, proceed to Step 5.
+
+### 4.3: Hard Gate — Fail if Setup Did Not Work
+
+If after auto-setup the browser MCP STILL does not respond:
+
+**STOP. Do NOT proceed to Step 5.**
+
+Return a blocking error to the user:
+
+```
+<shipit-blocked>
+No browser automation MCP available and auto-setup failed.
+
+Please manually configure one of:
+1. **Playwright MCP (recommended):** Add to ~/.claude/settings.json:
+   { "mcpServers": { "playwright": { "command": "npx", "args": ["@anthropic-ai/mcp-playwright"] } } }
+   Then run: npx playwright install chromium
+
+2. **Puppeteer MCP:** Add to ~/.claude/settings.json:
+   { "mcpServers": { "puppeteer": { "command": "npx", "args": ["-y", "@anthropic-ai/mcp-puppeteer"] } } }
+
+After configuring, restart Claude Code and re-run /shipit:peer-qa.
+</shipit-blocked>
+```
 
 Store which MCP is available as `BROWSER_MCP` ("playwright" or "puppeteer").
 
@@ -330,7 +410,7 @@ Handle these failure modes gracefully:
 | GitLab MR not found (404) | Return error: "MR not found at <URL>. Verify the URL is correct and accessible." |
 | GitLab permissions error | Return error: "Insufficient permissions to access MR. Check GitLab MCP configuration." |
 | GitLab MCP not available | Return error: "GitLab MCP server is not configured or not responding." |
-| No browser MCP available | Return error: "No browser automation MCP available. Please configure Playwright or Puppeteer MCP." |
+| No browser MCP available | **Hard gate.** Auto-setup Playwright MCP (install + configure). If auto-setup fails, STOP and block with setup instructions. |
 | Browser navigation fails | Capture error screenshot, mark scenario as FAIL, continue with remaining scenarios. |
 | Website unreachable | Return error: "Website <URL> is not reachable. Verify the URL and try again." |
 | Screenshot capture fails | Log warning, continue testing. Note in results that screenshot was not captured for that scenario. |
@@ -345,7 +425,9 @@ Handle these failure modes gracefully:
 - [ ] GitLab MCP used to fetch MR metadata and diff
 - [ ] Jira ticket description read for additional context
 - [ ] Test scenarios generated based on MR changes and ticket description
-- [ ] Browser MCP detected at runtime (Playwright preferred, Puppeteer fallback)
+- [ ] Browser MCP detected at runtime (Playwright preferred, Puppeteer fallback) — HARD GATE
+- [ ] If no MCP found: auto-setup attempted (install Playwright + configure settings)
+- [ ] If auto-setup failed: workflow blocked with manual setup instructions
 - [ ] Each test scenario executed in the browser
 - [ ] Screenshot captured for EVERY scenario (mandatory)
 - [ ] Summary table posted as Jira comment
