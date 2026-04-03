@@ -23,6 +23,8 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 | `/shipit:rollback` | Rollback to a previous task checkpoint |
 | `/shipit:discuss <topic>` | Discussion mode — chat about project, no code changes |
 | `/shipit:update` | Update ShipIt to latest version from remote |
+| `/shipit:peer-review` | Automate peer review — Jira-to-GitLab or GitLab-native MR selection, code review, comments, approval |
+| `/shipit:peer-qa` | Automate peer QA — browser testing, screenshots, Jira comments, ticket transition |
 | `/shipit:help` | Show usage guide |
 
 ## CRITICAL: How ShipIt Works
