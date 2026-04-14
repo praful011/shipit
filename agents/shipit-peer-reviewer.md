@@ -26,6 +26,7 @@ Before reviewing, load context:
 - `MR Source Branch` — the branch the MR was created from (for pattern commits)
 - `MR Target Branch` — the branch the MR targets (e.g., dev, main)
 - `GitLab Project Path` — the GitLab project path (e.g., group/project)
+- `Review Mode` — one of `efficiency` | `balanced` | `depth` (from /shipit:peer-review Step 5.5)
 </project_context>
 
 <process>
@@ -45,46 +46,69 @@ Use the GitLab MCP to fetch the merge request details:
 
 If the MR cannot be fetched (404, permissions error), return an error summary to the calling command.
 
-## Step 3: Run Code Review via /pr-review-toolkit:review-pr
+## Step 3: Run Code Review (Engine-Switched)
+
+Read `peer_review.engine` from `.shipit/config.json` in the ShipIt plugin root (not the reviewed project).
+
+### Step 3a. If engine == "shipit-review" (new first-party engine)
 
 <CRITICAL_GATE>
-YOUR VERY NEXT TOOL CALL IN THIS STEP **MUST** BE:
+Your very next tool call in this step MUST be:
+
+```
+Skill(skill: "shipit:shipit-review", args: {
+  "mode": "<Review Mode from input>",
+  "mr": { "url": "<MR URL>", "iid": "<IID>", "title": "<title>", "description": "<description>",
+          "source_branch": "<MR Source Branch>", "target_branch": "<MR Target Branch>",
+          "is_draft": <bool>, "author": "<author>" },
+  "ticket": { "key": "<Jira Key>", "summary": "<summary>", "description": "<description>" },
+  "raw_diff": "<unified diff from Step 2>",
+  "project_path": "<cwd of reviewed repo>",
+  "source_branch": "<MR Source Branch>"
+})
+```
+
+This is a HARD GATE. Do NOT review the diff yourself in this branch. Do NOT spawn specialist agents directly. The `shipit-review` skill owns the whole review pipeline and returns findings in the schema below.
+</CRITICAL_GATE>
+
+### Step 3b. If engine == "pr-review-toolkit" (legacy — unchanged behavior)
+
+<CRITICAL_GATE>
+Your very next tool call MUST be:
 
 ```
 Skill(skill: "pr-review-toolkit:review-pr", args: "<MR_URL>")
 ```
 
-This is a HARD GATE. You CANNOT proceed to Step 4 without calling this Skill tool first.
-
-DO NOT analyze the code yourself.
-DO NOT write your own review.
-DO NOT spawn your own review sub-agents.
-DO NOT summarize the diff and call it a review.
-
-The ONLY acceptable action is invoking the Skill tool with `pr-review-toolkit:review-pr`.
-
-If you catch yourself thinking "I can just review it myself" or "let me analyze the diff" — STOP. That is a violation. Call the Skill tool.
+This is a HARD GATE. Call the Skill tool, wait for results, proceed.
 </CRITICAL_GATE>
 
-The `/pr-review-toolkit:review-pr` skill will spawn its own specialized sub-agents (code-reviewer, silent-failure-hunter, pr-test-analyzer, type-design-analyzer, comment-analyzer) for a thorough multi-dimensional review.
+### 3c. Either way — normalize findings
 
-Pass the MR URL as the argument. The skill handles everything — you just receive the results.
+Both engines return a finding list. Normalize into an internal structure:
 
-If the Skill tool call fails (tool not available), ONLY THEN fall back to reading the `skills/code-review/SKILL.md` reference and performing a manual review.
+```json
+{
+  "verdict_hint": "APPROVE | REQUEST_CHANGES",
+  "critical": [ {severity, category, pattern_key, file, line_start, line_end, description, prevention, fail_snippet, pass_snippet, confidence} ],
+  "important": [...],
+  "minor": [...],
+  "summary": "<2–3 sentence overall>"
+}
+```
+
+If the legacy `pr-review-toolkit` result lacks `pattern_key` or `line_start/line_end`, synthesize them from the available file + description fields so downstream steps (Step 6.5 dedup, Step 5 inline comments) work uniformly. Synthesized `pattern_key` values use the form `<category-short>-legacy-<short-slug>`.
 
 ## Step 4: Categorize Review Outcome
 
-Parse the review results and categorize:
+Three verdicts now:
 
-**APPROVE** — if the review found:
-- No CRITICAL issues
-- No IMPORTANT issues
-- Only MINOR issues or no issues at all
-
-**REQUEST CHANGES** — if the review found:
-- Any CRITICAL issues, OR
-- 2 or more IMPORTANT issues, OR
-- 1 IMPORTANT issue that affects functionality or security
+- **COMMENTS_ONLY** — when `mr.is_draft === true`. Comments will be posted (Step 5) and patterns/issues still extracted (Step 6.5/6.6), but no approve or request-changes action on GitLab.
+- **REQUEST CHANGES** — when the review found:
+  - Any CRITICAL issue, OR
+  - 2 or more IMPORTANT issues, OR
+  - 1 IMPORTANT issue of category Security or Correctness.
+- **APPROVE** — otherwise.
 
 ## Step 5: Post Review Comments on GitLab
 
@@ -112,6 +136,8 @@ Using GitLab MCP, post comments on the merge request:
 2. **Inline comments** (if supported by GitLab MCP) — Post specific comments on the relevant lines of the diff for each issue found.
 
 ## Step 6: Approve or Request Changes
+
+**If verdict is `COMMENTS_ONLY`: skip this step entirely. Do not approve. Do not request changes. Proceed to Step 6.5.**
 
 Based on the categorization from Step 4:
 
@@ -448,7 +474,9 @@ Handle these failure modes gracefully:
 <success_criteria>
 - [ ] MR URL parsed correctly (project path + MR IID extracted)
 - [ ] GitLab MCP used to fetch MR metadata and diff
-- [ ] Code review performed via `/pr-review-toolkit:review-pr`
+- [ ] Code review performed via Step 3a (`shipit-review`) or Step 3b (`pr-review-toolkit:review-pr`) per config
+- [ ] `Review Mode` input captured and forwarded when using `shipit-review`
+- [ ] `COMMENTS_ONLY` branch handled when `mr.is_draft === true`
 - [ ] Review outcome categorized (approve vs request changes)
 - [ ] Summary comment posted on GitLab MR
 - [ ] Inline comments posted for specific issues (if supported)
