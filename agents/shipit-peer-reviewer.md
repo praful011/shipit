@@ -133,7 +133,18 @@ Using GitLab MCP, post comments on the merge request:
    _Review performed by ShipIt peer-review agent_
    ```
 
-2. **Inline comments** (if supported by GitLab MCP) — Post specific comments on the relevant lines of the diff for each issue found.
+2. **Inline comments (idempotent):** For each finding in `critical[] ∪ important[] ∪ minor[]`:
+
+   a. Compute `fingerprint = sha1("<file>|<line_start>|<line_end>|<pattern_key>")`.
+
+   b. Check `prior_findings_status[]` for an entry with the same fingerprint:
+      - **If match with `status: open`** → the inline comment already exists at `gitlab_comment_id`. **Skip posting**. Record the existing `gitlab_comment_id` for use in the new marker state.
+      - **If match with `status: resolved-by-refactor`** → the same bug class moved to a new location. Post a new inline comment at the new location. Reference the original GitLab issue URL from the matched entry (if present) in the comment body: `_(moved from a previously-flagged location; see original issue #X)_`.
+      - **If no match** → new finding. Post a new inline comment via GitLab MCP. Capture the returned `gitlab_comment_id`.
+
+   c. Record the final `(fingerprint, gitlab_comment_id)` pair for Step 7's marker upsert.
+
+   When `is_rereview == false`, `prior_findings_status` is empty → every finding is posted as new (existing behavior).
 
 ## Step 6: Approve or Request Changes
 
@@ -403,6 +414,8 @@ Only run this step if the review found **at least one CRITICAL issue**. IMPORTAN
 ### 6.6.1: Create One Issue Per CRITICAL Finding
 
 For each CRITICAL finding, create a GitLab issue in the same project as the MR:
+
+**Skip on refactor (re-review only):** Before creating an issue, check `prior_findings_status[]`. If any entry has `status == "resolved-by-refactor"` AND the same `pattern_key` as this new CRITICAL finding, **skip the issue-creation call**. The original GitLab issue (from the review that first surfaced this pattern) already tracks this bug class. Instead, append a line to the inline comment body: `_(tracked in prior issue from peer review — see <prior-issue-url-if-known>)_`. If the prior `gitlab_issue_url` was not captured, just skip issue creation silently — the inline comment is sufficient.
 
 ```
 mcp__gitlab__create_issue(
