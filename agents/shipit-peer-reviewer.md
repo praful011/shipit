@@ -178,6 +178,27 @@ Using GitLab MCP, post comments on the merge request:
 
    When `is_rereview == false`, `prior_findings_status` is empty → every finding is posted as new (existing behavior).
 
+## Step 5b: Escalation Replies (re-review only)
+
+Skip entirely if `is_rereview == false`.
+
+Read `peer_review.escalation_thresholds` from `.shipit/config.json`. For each entry `P` in `prior_findings_status` where `P.status == "open"`:
+
+1. Look up `threshold = escalation_thresholds[P.severity]`. If `null` or missing → skip this finding.
+2. If `P.times_seen >= threshold` AND `P.last_escalated_at_n < threshold`:
+   - Post a reply on the original comment thread (via GitLab MCP's comment-reply or discussion-note API, using `P.gitlab_comment_id` as the target):
+     ```
+     ⚠ Still unaddressed after <P.times_seen> reviews. This is a <P.severity> finding (<P.pattern_key>).
+     ```
+   - Set `P.last_escalated_at_n = P.times_seen`.
+3. Record the updated `last_escalated_at_n` for Step 7's marker upsert.
+
+**Notes:**
+
+- Subsequent thresholds are supported trivially by updating the config, e.g., `escalation_thresholds: {"CRITICAL": [3, 6, 10]}`. For v1, single-threshold-per-severity is sufficient; array support is a follow-up enhancement.
+- If `escalation_thresholds` is missing or empty, this step is a no-op regardless of `rereview_enabled`.
+- Reply posting failures (permissions, MCP errors) are logged and do not block Step 6 or later.
+
 ## Step 6: Approve or Request Changes
 
 **If verdict is `COMMENTS_ONLY`: skip this step entirely. Do not approve. Do not request changes. Proceed to Step 6.5.**
