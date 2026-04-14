@@ -90,13 +90,6 @@ skills/shipit-review-rules/SKILL.md                   # rule-pack companion (sha
 skills/shipit-review-rules/security.md                # FAIL/PASS pattern pairs for security
 skills/shipit-review-rules/performance.md             # FAIL/PASS pattern pairs for performance
 skills/shipit-review-rules/error-handling.md          # FAIL/PASS pattern pairs for error handling
-skills/shipit-review-rules/languages/ts.md            # TypeScript/JavaScript footguns
-skills/shipit-review-rules/languages/py.md            # Python footguns
-skills/shipit-review-rules/languages/go.md            # Go footguns
-skills/shipit-review-rules/languages/java.md          # Java footguns
-skills/shipit-review-rules/languages/kt.md            # Kotlin footguns
-skills/shipit-review-rules/languages/cpp.md           # C/C++ footguns
-skills/shipit-review-rules/languages/rust.md          # Rust footguns
 
 agents/shipit-correctness-reviewer.md                 # specialist 1
 agents/shipit-security-reviewer.md                    # specialist 2
@@ -218,12 +211,11 @@ Step 4's thresholds apply unchanged: any CRITICAL, or 2+ IMPORTANT, or 1 IMPORTA
 The skill content, when invoked, instructs the calling agent (`shipit-peer-reviewer`) to:
 
 1. **Pre-process:**
-   - Detect primary language(s) in the diff.
-   - Load matching rule-pack files from `skills/shipit-review-rules/`.
+   - Load all three rule-pack category files from `skills/shipit-review-rules/` (security, performance, error-handling).
    - Load `CLAUDE.md` excerpt from project.
    - Load `.claude/skills/pr-review-patterns/SKILL.md` if present.
    - Synthesize `intent_summary` from ticket + MR title/description.
-   - Apply PR compression if diff exceeds token budget: sort files by language/importance, skip lockfiles + generated files + vendored dirs, chunk large files.
+   - Apply PR compression if diff exceeds token budget: sort files by importance (source > config > tests > docs; skip lockfiles + generated files + vendored dirs), chunk large files.
 2. **Dispatch specialists in parallel:** six `Agent` calls, one per specialist, each receiving the input bundle (6.4) with the chosen `mode`.
 3. **If `mode == depth`:** after specialists return, spawn one aggregator `Agent` call with diff in randomized chunk order + all specialist findings; it returns an amended finding list.
 4. **Aggregate:**
@@ -260,7 +252,6 @@ Shared source of truth for both shipped rules and learned rules. All rules use o
 ### <pattern_key>  — <short title>
 **Category:** Security | Correctness | Performance | Error Handling | Testing | Patterns | Intent
 **Severity:** CRITICAL | IMPORTANT | MINOR
-**Languages:** ts, js, py, go, java, kt, cpp, rust, * (wildcard)
 **Why it matters:** <1–2 sentences>
 **Detection heuristic:** <what a reviewer looks for in the diff>
 
@@ -275,23 +266,23 @@ Shared source of truth for both shipped rules and learned rules. All rules use o
 ```
 ```
 
-Each language file holds patterns that only apply when that language is present in the diff. Category files (`security.md`, `performance.md`, `error-handling.md`) hold cross-language patterns.
+Three shipped category files cover universal cross-language patterns: `security.md` (injection, auth, secrets, XSS, SSRF), `performance.md` (N+1, blocking I/O, unbounded loops), and `error-handling.md` (swallowed errors, empty catch, misused fallbacks). **Language-specific footgun packs are deliberately not shipped** — modern Claude has strong baseline knowledge of language idioms, and adding static rule files would duplicate that knowledge and rot. Project-specific language rules emerge naturally through the learned-patterns skill (section 9) when a real review catches one. If a systemic language-specific gap appears in Phase 2 parity testing, add targeted rules as a followup.
 
 ## 9. Learned-patterns skill upgrades — `.claude/skills/pr-review-patterns/SKILL.md`
 
 Six improvements applied to Step 6.5 of `shipit-peer-reviewer`:
 
-1. **Same entry format as the rule-pack skill** (section 8). Each learned pattern has `pattern_key`, `category`, `severity`, `languages`, `why`, `detection heuristic`, `FAIL`, `PASS`. Replace the current prose-only `_Pattern:_ / _Prevention:_` format.
+1. **Same entry format as the rule-pack skill** (section 8). Each learned pattern has `pattern_key`, `category`, `severity`, `why`, `detection heuristic`, `FAIL`, `PASS`. Replace the current prose-only `_Pattern:_ / _Prevention:_` format.
 2. **Per-category caps** (total still ~30 but distributed):
    - Security: 10
    - Error Handling: 8
    - Performance: 6
    - Patterns: 4
    - Testing: 4
-3. **Language scoping** — each entry lists `languages`; a pattern only participates in a review when the diff's primary languages intersect. Wildcards (`*`) always load.
-4. **Metadata per entry** — `created_date`, `applied_count`, `last_matched_date`. Pattern is evicted if `applied_count == 0` and `created_date > 20 reviews ago` (tracked via a rolling review counter in the skill file header), OR if `last_matched_date > 90 days ago` and `applied_count < 3`.
-5. **`pattern_key`-based dedup** — dedup is a string match on `pattern_key`. No LLM-judgment ">80% semantic overlap" logic. If a new finding collides with an existing key, increment `applied_count` and update `last_matched_date` instead of adding a new entry.
-6. **Consolidation pass** — if 3+ entries share a common prefix in `pattern_key` (e.g., `sql-injection-*`), the extraction step proposes a merged, more general rule with multiple FAIL snippets.
+3. **Metadata per entry** — `created_date`, `applied_count`, `last_matched_date`. Pattern is evicted if `applied_count == 0` and `created_date > 20 reviews ago` (tracked via a rolling review counter in the skill file header), OR if `last_matched_date > 90 days ago` and `applied_count < 3`.
+4. **`pattern_key`-based dedup** — dedup is a string match on `pattern_key`. No LLM-judgment ">80% semantic overlap" logic. If a new finding collides with an existing key, increment `applied_count` and update `last_matched_date` instead of adding a new entry.
+5. **Consolidation pass** — if 3+ entries share a common prefix in `pattern_key` (e.g., `sql-injection-*`), the extraction step proposes a merged, more general rule with multiple FAIL snippets.
+6. **File-path hints in `detection heuristic`** — when a pattern is language- or framework-specific, authors can mention it in the `detection heuristic` field (e.g., "in Python files only" or "when the diff touches `requirements.txt`"). No structured `languages` field is needed — the reviewer reads the heuristic and applies judgment.
 
 These changes run inside Step 6.5's existing worktree commit — no new file ops, same HARD GUARD on "only SKILL.md staged", same commit + push flow, same best-effort failure handling.
 
@@ -313,8 +304,8 @@ spawn shipit-peer-reviewer(mr_url, ticket_info, mode, …)
       v
 [3] (CHANGED) Skill("shipit:shipit-review", {mode, diff, mr, ticket, project_path})
         |
-        +-- 3a pre-process: language detection, PR compression,
-        |        intent synthesis, load CLAUDE.md + learned rules + rule packs
+        +-- 3a pre-process: load rule packs (security / performance / error-handling),
+        |        CLAUDE.md, learned patterns; synthesize intent; apply PR compression
         +-- 3b spawn 6 specialists in parallel
         +-- 3c (depth only) spawn 1 aggregator with randomized chunk order
         +-- 3d aggregate: dedup by (file, line, pattern_key); rank
@@ -397,7 +388,7 @@ Add to `.shipit/config.json`:
 | Verdict set? | `APPROVE` / `REQUEST CHANGES` / `COMMENTS_ONLY` (new, for drafts). |
 | Determinism / fingerprinting / incremental re-review? | Out of scope. |
 | Fix-introduced regression handling? | Out of scope. |
-| Language-specific reviewers? | Ship as rule packs (shared skill), not as separate agents. |
+| Language-specific reviewers or rule packs? | Neither shipped. Trust Claude's base knowledge of language idioms; learned-patterns skill captures project-specific language rules when they actually arise. |
 | Validation phase (run tests/lint)? | Out of scope. |
 | Learned-patterns format? | Upgrade to rule-pack format; `pattern_key`-based dedup; per-category caps; aging. |
 
