@@ -71,6 +71,12 @@
                      │
                      ▼
    ┌─────────────────────────────────┐
+   │ Step 5.5: Ask mode              │
+   │ (efficiency | balanced | depth) │
+   └────────────────┬────────────────┘
+                    │
+                    ▼
+   ┌─────────────────────────────────┐
    │ Step 8: Get MR source branch    │
    │ (GitLab MCP → source_branch)   │
    └────────────────┬────────────────┘
@@ -156,26 +162,29 @@
    │          ┌────────────┴──── Fails? → Error, stop      │
    │          │                                            │
    │          ▼                                            │
-   │  ╔══════════════════════════════════╗                  │
-   │  ║ Step 3: HARD GATE               ║                  │
-   │  ║ Call /pr-review-toolkit:review-pr║                  │
-   │  ║                                  ║                  │
-   │  ║ Spawns 5 sub-agents:            ║                  │
-   │  ║  ┌────────────┐ ┌────────────┐  ║                  │
-   │  ║  │   Code     │ │  Silent    │  ║                  │
-   │  ║  │  Reviewer  │ │  Failure   │  ║                  │
-   │  ║  │            │ │  Hunter    │  ║                  │
-   │  ║  └────────────┘ └────────────┘  ║                  │
-   │  ║  ┌────────────┐ ┌────────────┐  ║                  │
-   │  ║  │   Test     │ │   Type     │  ║                  │
-   │  ║  │  Analyzer  │ │  Design    │  ║                  │
-   │  ║  │            │ │  Analyzer  │  ║                  │
-   │  ║  └────────────┘ └────────────┘  ║                  │
-   │  ║  ┌────────────┐                 ║                  │
-   │  ║  │  Comment   │                 ║                  │
-   │  ║  │  Analyzer  │                 ║                  │
-   │  ║  └────────────┘                 ║                  │
-   │  ╚════════════════╤═════════════════╝                  │
+   │  ╔══════════════════════════════════════════════════╗  │
+   │  ║ Step 3: HARD GATE                               ║  │
+   │  ║ Skill("shipit:shipit-review", ...)              ║  │
+   │  ║   [or pr-review-toolkit legacy per              ║  │
+   │  ║    peer_review.engine]                          ║  │
+   │  ║                                                 ║  │
+   │  ║ Legacy: 5 sub-agents (or the 6 ShipIt           ║  │
+   │  ║ specialists when engine = shipit-review):       ║  │
+   │  ║  ┌────────────┐ ┌────────────┐                 ║  │
+   │  ║  │   Code     │ │  Silent    │                 ║  │
+   │  ║  │  Reviewer  │ │  Failure   │                 ║  │
+   │  ║  │            │ │  Hunter    │                 ║  │
+   │  ║  └────────────┘ └────────────┘                 ║  │
+   │  ║  ┌────────────┐ ┌────────────┐                 ║  │
+   │  ║  │   Test     │ │   Type     │                 ║  │
+   │  ║  │  Analyzer  │ │  Design    │                 ║  │
+   │  ║  │            │ │  Analyzer  │                 ║  │
+   │  ║  └────────────┘ └────────────┘                 ║  │
+   │  ║  ┌────────────┐                                ║  │
+   │  ║  │  Comment   │                                ║  │
+   │  ║  │  Analyzer  │                                ║  │
+   │  ║  └────────────┘                                ║  │
+   │  ╚══════════════════════╤════════════════════════╝  │
    │                   │                                   │
    │                   ▼                                   │
    │  Step 4: Categorize verdict                           │
@@ -384,10 +393,11 @@ This flow runs in the BACKGROUND — zero interference.
    ┌───────────────────────────────────────────┐
    │          shipit-peer-reviewer              │
    │                                            │
-   │  ┌──────────┐  ┌──────────────────────┐   │
-   │  │ GitLab   │  │ pr-review-toolkit    │   │
-   │  │ MCP      │──│ (5 sub-agents)       │   │
-   │  │(diff)    │  └──────────────────────┘   │
+   │  ┌──────────┐  ┌──────────────────────────────────┐  │
+   │  │ GitLab   │  │ Skill("shipit:shipit-review")    │  │
+   │  │ MCP      │──│ [or pr-review-toolkit legacy per │  │
+   │  │(diff)    │  │  peer_review.engine]             │  │
+   │  └──────────┘  └──────────────────────────────────┘  │
    │  └──────────┘                              │
    │  ┌──────────┐  ┌──────────────────────┐   │
    │  │ GitLab   │  │ Git Worktree         │   │
