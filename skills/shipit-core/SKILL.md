@@ -70,6 +70,12 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 | **shipit-reviewer** | Reviews: receipt + spec + quality + patterns, extracts lessons | haiku |
 | **shipit-verifier** | Epic-level requirements + integration check (merged) | sonnet |
 | **shipit-debugger** | Scientific method debugging with persistent state | sonnet |
+| **shipit-correctness-reviewer** | Correctness specialist used by `shipit-review`: logic bugs, off-by-one, null refs, edge cases | sonnet |
+| **shipit-security-reviewer** | Security specialist: secrets, injection, authz, XSS, SSRF, path traversal | sonnet |
+| **shipit-performance-reviewer** | Performance specialist: N+1, blocking I/O, unbounded loops, missing indexes | sonnet |
+| **shipit-error-handling-reviewer** | Error-handling specialist: swallowed errors, empty catch, silent drops | sonnet |
+| **shipit-test-reviewer** | Test specialist: coverage of new logic, test quality, flaky patterns | sonnet |
+| **shipit-intent-reviewer** | Intent specialist: diff-vs-intent alignment, scope creep | sonnet |
 
 ## Auto-Loop Signals
 
