@@ -125,6 +125,37 @@ If `mode == "depth"`, after the six specialists return:
    - Else → `APPROVE`
 5. **Compose `summary`:** 2–3 sentences naming the most significant findings and overall code quality.
 
+### 4b. Prior-findings check (re-review only)
+
+Skip entirely if `is_rereview == false`.
+
+For each entry `P` in `prior.findings`:
+
+1. **Read** the file `P.file` at lines `P.line_start..P.line_end` (tolerance ±5 lines to accommodate trivial shifts from unrelated edits above).
+2. **Shape check:** build the identifier set — the set of non-keyword tokens (length ≥ 3) in `P.fail_snippet` that aren't common English words. Does the current read range contain at least one identifier from this set, AND is the range not fully commented-out / removed?
+   - **Yes** → mark `P.status = open`. Increment `P.times_seen` (or set to 1 if missing).
+3. **No** → scan the current-run findings list for any finding with `pattern_key == P.pattern_key` in the same file (any line):
+   - **Found** → mark `P.status = resolved-by-refactor`. Do not increment `times_seen`. The new-location finding is already in the current-run output via normal aggregation.
+   - **Not found** → mark `P.status = fixed`. `P` will be dropped from the marker state in Step 7 (of `shipit-peer-reviewer`).
+
+Produce a `prior_findings_status[]` list with one entry per prior finding:
+
+```json
+{
+  "fingerprint": "<unchanged from prior>",
+  "pattern_key": "...",
+  "severity": "CRITICAL|IMPORTANT|MINOR",
+  "file": "...",
+  "line_start": 42,
+  "line_end": 46,
+  "status": "open|fixed|resolved-by-refactor",
+  "times_seen": 3,
+  "last_escalated_at_n": 0,
+  "gitlab_comment_id": 12345,
+  "first_seen_at": "<unchanged>"
+}
+```
+
 ### 5. Return
 
 Return a single JSON object:
@@ -135,9 +166,15 @@ Return a single JSON object:
   "critical": [ <finding>, ... ],
   "important": [ <finding>, ... ],
   "minor": [ <finding>, ... ],
-  "summary": "<2–3 sentence overview>"
+  "summary": "<2–3 sentence overview>",
+  "is_rereview": true,
+  "delta_range": {"from": "<prior_sha>", "to": "<current_head>", "n_commits": 3},
+  "delta_fallback_reason": null,
+  "prior_findings_status": [ <entry from Step 4b>, ... ]
 }
 ```
+
+The last three fields (`is_rereview`, `delta_range`, `delta_fallback_reason`, `prior_findings_status`) are included only when `is_rereview == true`. `delta_fallback_reason` is non-null only if Step 1's `delta_diff` computation failed (e.g., `"prior_sha_not_in_history"`). `shipit-peer-reviewer` consumes these fields in its updated Step 5 (idempotent posting), Step 5b (escalation), and Step 7 (marker upsert).
 
 Every `<finding>` preserves the specialist's output schema fields (`severity`, `category`, `pattern_key`, `file`, `line_start`, `line_end`, `description`, `prevention`, `fail_snippet`, `pass_snippet`, `confidence`).
 
