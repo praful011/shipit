@@ -35,6 +35,25 @@ The caller (`shipit-peer-reviewer`) invokes this skill with:
 
 ## Process
 
+### 0. Marker detection (re-review gate)
+
+Before any other processing, check for prior review state.
+
+1. Read `peer_review.rereview_enabled` from `.shipit/config.json`. If `false`, set `is_rereview = false` and skip to Step 1 — treat this run as a first review.
+2. Otherwise, use the GitLab MCP to list comments on the MR.
+3. Scan for a top-level MR comment whose body starts with `<!-- shipit-peer-review:state v1`.
+4. If found:
+   - Extract the JSON payload between the opening `<!-- shipit-peer-review:state v1` and the closing `-->`.
+   - Parse as JSON. If parse fails → `is_rereview = false`; log a warning; proceed as first review.
+   - Otherwise: set `is_rereview = true`, capture `prior.last_reviewed_sha`, `prior.findings[]`, `prior.mode_used`.
+5. If not found: `is_rereview = false`. This is a first review.
+
+The extracted `prior` state is passed through to Step 1 and Step 4b.
+
+### 0b. Config-driven disable
+
+If `peer_review.rereview_enabled == false`, force `is_rereview = false` regardless of marker presence. This is a hard rollback switch — no delta review, no idempotent posting, no escalation, no marker upsert. The pre-existing (first-review-every-run) behavior resumes.
+
 ### 1. Pre-process
 
 1. **Parse the diff.** Split into per-file hunks. Tag each file with a language (from extension: `.ts`/`.tsx` → ts, `.py` → py, `.go` → go, `.rs` → rust, etc.).
@@ -47,6 +66,27 @@ The caller (`shipit-peer-reviewer`) invokes this skill with:
    - Read `<project_path>/.claude/skills/pr-review-patterns/SKILL.md` if present; parse rule entries; write them into `project.learned_rules`.
    - Resolve the three shipped rule-pack paths: `skills/shipit-review-rules/security.md`, `performance.md`, `error-handling.md`. Pass the absolute paths as `project.shipped_rules_refs`.
 5. **Synthesize `intent_summary`.** 2–4 sentences merging: `ticket.summary` + `ticket.description` + `mr.title` + `mr.description`. State what the author intends to change and why.
+6. **If `is_rereview`:** construct two diffs instead of one.
+   - `delta_diff` — the diff from `prior.last_reviewed_sha` to the MR head. Compute via the GitLab MCP (`get_merge_request_details` or the compare-commits API) or, if that fails, via local `git log`/`git diff` in a worktree on the MR source branch.
+   - `full_diff` — the entire MR diff (as today).
+   - If `delta_diff` computation fails (prior SHA not in history after force-push, API error), fall back: use `full_diff` for both values and note this in the Step 5 output under a new `delta_fallback_reason` field.
+
+   Both diffs, plus `prior.findings[]` with their fingerprints, are passed to each specialist in the input bundle. Add these fields:
+
+   ```json
+   {
+     ...,
+     "is_rereview": true,
+     "delta_diff": { ... },
+     "full_diff": { ... },
+     "prior_findings": [ {fingerprint, pattern_key, severity, file, line_start, line_end, status}, ... ]
+   }
+   ```
+
+   Specialists receive an additional instruction in their prompt:
+   > *"This is a re-review. Focus your attention on `delta_diff` (commits since the last review). Additionally, for each entry in `prior_findings`, check whether the fix introduced new issues in your dimension."*
+
+   When `!is_rereview`: pass only the single `diff` field (as today). Omit `delta_diff`, `full_diff`, `prior_findings`.
 
 ### 2. Dispatch specialists in parallel
 
