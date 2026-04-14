@@ -168,6 +168,14 @@
    │  ║   [or pr-review-toolkit legacy per              ║  │
    │  ║    peer_review.engine]                          ║  │
    │  ║                                                 ║  │
+   │  ║  ┌─── Step 0: Marker? ────┐                    ║  │
+   │  ║  │ first:  full_diff       │                    ║  │
+   │  ║  │ re:     delta +         │                    ║  │
+   │  ║  │         prior-findings  │                    ║  │
+   │  ║  │         check           │                    ║  │
+   │  ║  └─────────────────────────┘                    ║  │
+   │  ║  Step 7: Upsert marker state (re-review only)   ║  │
+   │  ║                                                 ║  │
    │  ║ Legacy: 5 sub-agents (or the 6 ShipIt           ║  │
    │  ║ specialists when engine = shipit-review):       ║  │
    │  ║  ┌────────────┐ ┌────────────┐                 ║  │
