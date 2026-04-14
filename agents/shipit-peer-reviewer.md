@@ -160,19 +160,29 @@ Only run this step if the review found **at least one CRITICAL or IMPORTANT issu
 
 ### 6.5.1: Filter and Generalize Findings
 
-From the review results, extract each CRITICAL and IMPORTANT issue. For each one, create a generalized pattern:
+From the review results, extract each CRITICAL and IMPORTANT finding. For each, produce an entry in the **rule-pack format** (same shape as `skills/shipit-review-rules/*.md`):
 
-| Field | Description |
-|-------|-------------|
-| **Category** | One of: Security, Error Handling, Patterns, Testing, Performance |
-| **Severity** | CRITICAL or IMPORTANT |
-| **Pattern** | Generalized description of what went wrong. Remove all MR-specific details (file names, variable names, line numbers, branch names). Write it as a universal rule. |
-| **Prevention** | Concrete, actionable rule for what to do instead. Must be specific enough to follow without context. |
+```markdown
+### <pattern_key>  — <short title>
+**Category:** Security | Correctness | Performance | Error Handling | Testing | Patterns | Intent
+**Severity:** CRITICAL | IMPORTANT
+**Why it matters:** <1–2 generalized sentences; no MR-specific names>
+**Detection heuristic:** <what a reviewer should look for in a diff>
 
-**Example transformation:**
-- Raw finding: "CRITICAL: `api/users.py:42` — SQL injection in `get_user()` via string interpolation of `user_id`"
-- Generalized pattern: "SQL queries constructed via string interpolation instead of parameterized queries"
-- Prevention: "Always use parameterized queries or ORM methods for database access. Never interpolate user input into SQL strings."
+**FAIL**
+```<lang>
+<generalized code showing the anti-pattern>
+```
+
+**PASS**
+```<lang>
+<generalized code showing the fix>
+```
+
+<!-- meta: created_date=YYYY-MM-DD applied_count=0 last_matched_date=YYYY-MM-DD -->
+```
+
+Use the `pattern_key` produced by the specialist in Step 3's JSON output. Do NOT invent a new key if one exists.
 
 ### 6.5.2: Read Existing Skill File
 
@@ -184,46 +194,44 @@ cat .claude/skills/pr-review-patterns/SKILL.md
 
 If the file does not exist, create it from the template below. If it exists, read its current contents.
 
-### 6.5.3: Clean Up Existing Duplicates
+### 6.5.3: Deduplicate by `pattern_key`
 
-**Before adding new patterns, scan the entire file for duplicates that already exist.** Two different reviewers may have independently added the same pattern during separate review sessions. This cleanup runs EVERY time, regardless of whether new patterns are being added.
+Dedup is a pure string match on the `pattern_key` field. No LLM-judgment semantic-overlap check.
 
-For each category section:
-1. Compare every entry against every other entry in the **same category**
-2. If two entries have >80% semantic overlap (same root cause, same prevention approach), **remove the less specific one** (keep the one with the better prevention rule)
-3. If both are equally specific, keep the older one (appears first in the file) and remove the newer one
-4. Use your judgment for similarity — do NOT rely on exact string matching
+For each new finding:
+1. Search existing entries for one with the same `pattern_key`.
+2. If found: increment its `applied_count` in the meta line, update `last_matched_date` to today's date, do NOT add a new entry.
+3. If not found: add the new entry under the matching `## <Category>` heading with `created_date = today`, `applied_count = 0`, `last_matched_date = today`.
 
-After cleanup, the file may have fewer entries than before. This is expected and correct.
+After adding new entries, scan for a consolidation opportunity: if 3+ entries in the same category share a common `pattern_key` prefix (e.g., `sql-injection-*`), add a TODO comment at the top of the category section proposing a merged rule. Do not auto-merge — leave the suggestion for a human reviewer.
 
-### 6.5.4: Deduplicate New Patterns Against Existing Entries
+### 6.5.5: Enforce Per-Category Caps and Aging Eviction
 
-**Cross-reviewer deduplication:** Compare each new pattern against ALL remaining entries in the skill file (after cleanup). Different reviewers may have already captured similar findings.
+**Caps:**
 
-For each new pattern:
-1. Find all existing entries in the **same category** (e.g., all Security entries)
-2. Compare the new pattern's description against each existing entry
-3. If any existing entry has >80% semantic overlap (same root cause, same prevention approach), **skip the new pattern** — it's a duplicate
-4. Use your judgment for similarity — do NOT rely on exact string matching
+| Category | Max entries |
+|---|---|
+| Security | 10 |
+| Error Handling | 8 |
+| Performance | 6 |
+| Patterns | 4 |
+| Testing | 4 |
 
-Only patterns that are genuinely new (not already captured in any form) should be added.
+**Before adding a new entry**, if the target category is at its cap, evict the least valuable existing entry in that category using the following order:
 
-### 6.5.5: Enforce 30-Entry Cap
+1. **Expired by age** — entries where `applied_count == 0` and 20+ reviews have happened since `created_date`.
+2. **Expired by staleness** — entries where `last_matched_date > 90 days ago` and `applied_count < 3`.
+3. **Lowest `applied_count`** — tie-break on oldest `created_date`.
 
-Count total entries across all categories. If adding new entries would exceed 30:
-1. CRITICAL entries always get priority
-2. Remove the **oldest IMPORTANT** entries to make room (entries are ordered by when they were added — oldest are at the top of each category section)
-3. Never remove a CRITICAL entry to make room for an IMPORTANT entry
+Increment the file-header review counter (`<!-- shipit:review-counter=N -->`) by 1 every time Step 6.5 runs, regardless of whether new entries were added.
+
+CRITICAL entries still take priority: if a CRITICAL is being added and the only available evictable entries are other CRITICAL entries, skip the cap for this run rather than evict another CRITICAL.
 
 ### 6.5.6: Write Updated Skill File
 
 Write the updated skill file to `.claude/skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
 
-Each entry format:
-```markdown
-- **[SEVERITY]** _Pattern:_ <generalized pattern description>
-  _Prevention:_ <actionable prevention rule>
-```
+Each entry uses the rule-pack format defined in 6.5.1. Entries live under the matching `## <Category>` heading and are separated by `---` dividers. The file-header review counter (`<!-- shipit:review-counter=N -->`) is incremented once per Step 6.5 run.
 
 ### 6.5.7: Commit on MR Source Branch and Push (via Worktree)
 
@@ -353,12 +361,18 @@ name: pr-review-patterns
 description: Code patterns to avoid — learned from peer reviews. Read before writing code.
 ---
 
+<!-- shipit:review-counter=0 -->
+
 # Learned Patterns from Peer Reviews
 
-Patterns below were discovered during peer reviews.
-Follow these rules when writing code to avoid repeating known mistakes.
+Patterns below were captured during peer reviews and use the shared rule-pack format
+(see `skills/shipit-review-rules/` in the ShipIt plugin). Each entry has a stable
+`pattern_key`, category, severity, why, detection heuristic, FAIL and PASS snippets,
+and a meta line tracking applied_count + last_matched_date.
 
-**Max 30 entries.** New CRITICAL entries replace oldest IMPORTANT if at cap.
+**Per-category caps:** Security 10, Error Handling 8, Performance 6, Patterns 4, Testing 4.
+**Eviction:** Entry removed when `applied_count == 0` and 20+ reviews have happened since
+`created_date`, OR `last_matched_date` is older than 90 days and `applied_count < 3`.
 
 ## Security
 _No patterns yet._
