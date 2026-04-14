@@ -15,7 +15,7 @@ Automate the peer review workflow with two entry paths: **Jira flow** (tickets i
 |-----------|----------|-------------|
 | Jira MCP (Atlassian) | For Jira flow | Must be configured with access to the Jira project containing peer review tickets |
 | GitLab MCP | Yes | Must be configured with access to fetch MRs, post comments, approve/reject, and create issues |
-| `/pr-review-toolkit:review-pr` | Yes | Existing code review skill used as the review engine |
+| `shipit:shipit-review` (new) or `pr-review-toolkit:review-pr` (legacy) | Yes | Review engine. Selected by `peer_review.engine` in `.shipit/config.json`. Default is `pr-review-toolkit` during Phase 1; flips to `shipit-review` after parity verification. |
 
 ## Workflow Overview
 
@@ -50,7 +50,7 @@ User invokes /shipit:peer-review
 [7] Agent fetches MR diff via GitLab API (primary source of truth)
         |
         v
-[8] Agent runs /pr-review-toolkit:review-pr
+[8] Agent runs Skill("shipit:shipit-review", ...) OR /pr-review-toolkit:review-pr (by config)
         |
         v
 [9] Agent posts review comments on GitLab MR
@@ -67,6 +67,18 @@ User invokes /shipit:peer-review
         v
 [13] Summary returned to user
 ```
+
+## Review Mode Selection
+
+When `peer_review.ask_mode_each_run` is `true` (the default), Step 5.5 of `/shipit:peer-review` prompts the user to choose a review mode before spawning the reviewer agent. This allows per-run control over depth vs. speed.
+
+| Mode | Behavior | Approximate Time |
+|------|----------|-----------------|
+| `efficiency` | Single-pass review; fastest; good for small or low-risk diffs | Fast |
+| `balanced` | Standard multi-specialist pass; recommended for most MRs | Moderate |
+| `depth` | Full six-specialist deep review; highest signal; best for complex or security-sensitive changes | Slower |
+
+When `peer_review.ask_mode_each_run` is `false`, the mode is read silently from `peer_review.default_mode` in `.shipit/config.json` and the user is not prompted.
 
 ## MCP Dependencies
 
@@ -146,7 +158,8 @@ After each review, the agent extracts CRITICAL and IMPORTANT findings into a ski
 |--------|-------------|
 | **Jira** | Reads tickets in "Peer Review" status; extracts MR URLs from custom fields, remote links, description, or comments |
 | **GitLab** | Lists MRs assigned for review; fetches MR diffs; posts review comments; approves or requests changes; creates issues for CRITICAL findings |
-| **pr-review-toolkit** | Provides the code review engine (security, quality, patterns, testing checks) |
+| **shipit-review** (new) | First-party review engine. Orchestrates six specialists (correctness, security, performance, error-handling, test, intent) across three modes (efficiency/balanced/depth). |
+| **pr-review-toolkit** (legacy, still supported) | External review engine kept live via `peer_review.engine = "pr-review-toolkit"` during Phase 1 rollout. |
 | **ShipIt ecosystem** | Follows ShipIt command/agent patterns; can be invoked alongside other ShipIt commands |
 
 ## Review Outcome Criteria
