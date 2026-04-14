@@ -249,7 +249,13 @@ Create `.shipit/config.json` with user's choices:
   "peer_review": {
     "engine": "pr-review-toolkit",
     "default_mode": "balanced",
-    "ask_mode_each_run": true
+    "ask_mode_each_run": true,
+    "rereview_enabled": true,
+    "escalation_thresholds": {
+      "CRITICAL": 3,
+      "IMPORTANT": 5,
+      "MINOR": null
+    }
   }
 }
 ```

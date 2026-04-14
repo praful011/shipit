@@ -80,6 +80,40 @@ When `peer_review.ask_mode_each_run` is `true` (the default), Step 5.5 of `/ship
 
 When `peer_review.ask_mode_each_run` is `false`, the mode is read silently from `peer_review.default_mode` in `.shipit/config.json` and the user is not prompted.
 
+## Re-review Behavior
+
+When the engine is `shipit-review` and `peer_review.rereview_enabled` is `true` (default), running `/shipit:peer-review` on an MR that has been reviewed before produces a **re-review** with these differences from a first review:
+
+| Behavior | First review | Re-review |
+|---|---|---|
+| Diff reviewed | Full MR | Commits since last review (delta), with prior findings in context |
+| Inline comments | Post for every finding | Skip findings whose fingerprint was already posted (idempotent) |
+| Prior findings | N/A | Checked: `open` / `fixed` / `resolved-by-refactor` |
+| Regression detection | N/A | Specialists get a prompt to flag bugs introduced by the fix commit |
+| Summary comment | "Automated Peer Review" template | "Re-review" template showing new + prior + delta range |
+| Marker state | Created | Updated in place |
+
+### Escalation
+
+Unaddressed `open` findings have a `times_seen` counter. When `times_seen` crosses `peer_review.escalation_thresholds[severity]`, the bot posts a single reply on the original comment thread (not a spam loop). Defaults:
+
+| Severity | Default threshold |
+|---|---|
+| CRITICAL | 3 reviews |
+| IMPORTANT | 5 reviews |
+| MINOR | disabled |
+
+Set any threshold to `null` to disable escalation for that severity.
+
+### Rollback
+
+Three independent dials:
+1. `peer_review.engine: "pr-review-toolkit"` → disables the entire internal engine (re-review included).
+2. `peer_review.engine: "shipit-review"` + `rereview_enabled: false` → internal engine runs but treats every run as a first review.
+3. `escalation_thresholds: {...all null}` → re-review active, escalation disabled.
+
+Prior marker comments left on MRs by earlier runs are not destructive — they are simply ignored when `rereview_enabled` is `false`.
+
 ## MCP Dependencies
 
 ### Jira MCP Tools (Jira flow only)

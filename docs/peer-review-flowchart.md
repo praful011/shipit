@@ -133,6 +133,17 @@ flowchart TD
     style END fill:#4CAF50,color:#fff
 ```
 
+### Re-review vs first review
+
+Re-review is controlled by `peer_review.rereview_enabled` in `.shipit/config.json`. When enabled and a marker comment exists on the MR:
+- Orchestration skill adds Step 0 (marker detection) → extracts prior findings
+- Step 1 constructs both `delta_diff` and `full_diff`
+- Specialists focus on the delta; also check prior findings for regressions
+- Step 4b verifies each prior finding: `open` / `fixed` / `resolved-by-refactor`
+- `shipit-peer-reviewer` Step 5 skips duplicate inline posts; Step 5b fires escalation replies when `times_seen` crosses the severity threshold; Step 7 upserts the marker comment
+
+Disabling `rereview_enabled` forces every run to behave as a first review regardless of marker presence. Escalation replies are controlled independently via `peer_review.escalation_thresholds`.
+
 ## Worktree Flow (Pattern Commit — Step 6.5.7)
 
 ```mermaid

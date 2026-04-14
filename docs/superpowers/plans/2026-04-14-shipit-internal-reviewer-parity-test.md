@@ -41,3 +41,27 @@ For each MR, run the workflow twice — once with `peer_review.engine = "pr-revi
 ## Sign-Off
 
 Once all 15 rows are checked and all acceptance criteria are met, the maintainer writes a short summary in this file and opens a follow-up MR that flips `peer_review.engine` default from `"pr-review-toolkit"` to `"shipit-review"`.
+
+---
+
+## Re-review Test Cases (Phase 2 addendum)
+
+After the base parity matrix passes, run these six re-review cases. Each requires a real MR you can push to.
+
+| # | Case | Setup | Expected |
+|---|---|---|---|
+| R1 | First review | MR never reviewed by `shipit-review` | Marker comment created on MR with `schema: v1`, `last_reviewed_sha`, `findings[]`. Summary uses first-review template. |
+| R2 | Re-review, no dev changes | Re-run without pushing new commits | Marker updated with new `reviewed_at`; zero new inline comments; summary shows `N` prior still open. |
+| R3 | Re-review, unrelated push | Dev pushes an unrelated change (e.g., log line) | Delta reviewed only; prior findings remain `open`; `times_seen` incremented; no escalation yet. |
+| R4 | Re-review, fix applied | Dev addresses a prior CRITICAL | Prior CRITICAL marked `fixed` and dropped from marker. Summary reports "fixed: 1". Verdict APPROVE if nothing else open. |
+| R5 | Fix-introduces-new-bug | Dev "fixes" a CRITICAL by removing try/catch (introducing a silent-drop bug) | Prior finding `fixed`; new error-handling finding posted. Verdict respects the new finding. |
+| R6 | Escalation threshold | Third re-review with the same CRITICAL still open (`times_seen` reaches 3) | One reply posted on the original comment thread: `⚠ Still unaddressed after 3 reviews`. `last_escalated_at_n = 3`. Fourth re-review with no change → no additional reply. |
+
+### Rollback verification
+
+After the re-review cases pass, set `peer_review.rereview_enabled: false` and run `/shipit:peer-review` once. Expected:
+
+- Step 0 immediately returns `is_rereview = false`.
+- Full MR diff reviewed (not delta).
+- Summary uses first-review template.
+- No marker upsert (old marker on MR is left alone, not deleted).
