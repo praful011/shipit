@@ -1,0 +1,12 @@
+{
+  "model_profile": "balanced",
+  "autonomy_mode": "autonomous",
+  "adaptive_models": false,
+  "tdd": false,
+  "auto_commit": true,
+  "peer_review": {
+    "engine": "pr-review-toolkit",
+    "default_mode": "balanced",
+    "ask_mode_each_run": true
+  }
+}

@@ -25,7 +25,9 @@ flowchart TD
     EXTRACT_MR --> CONVERGE
 
     CONVERGE -->|Fetch fails| BLOCK_FETCH[/"HARD GATE:\nNetwork/auth error.\nWorkflow stops."/]
-    CONVERGE -->|Fetch OK| GET_BRANCH["Step 8: Get MR\nsource branch\n(GitLab MCP)"]
+    CONVERGE -->|Fetch OK| ASK_MODE["Step 5.5: Ask mode\n(efficiency | balanced | depth)"]
+
+    ASK_MODE --> GET_BRANCH["Step 8: Get MR\nsource branch\n(GitLab MCP)"]
 
     GET_BRANCH --> SPAWN["Spawn\nshipit-peer-reviewer\nagent"]
 
@@ -69,9 +71,9 @@ flowchart TD
     FETCH_MR -->|MR not found| ERR_MR[/"Error: MR not found\nor no permissions"/]
     FETCH_MR -->|OK| REVIEW
 
-    REVIEW["Step 3: HARD GATE\nCall /pr-review-toolkit:review-pr"] --> TOOLKIT
+    REVIEW["Step 3: HARD GATE\nSkill('shipit:shipit-review')  [or pr-review-toolkit legacy per peer_review.engine]"] --> TOOLKIT
 
-    subgraph TOOLKIT ["pr-review-toolkit (5 sub-agents)"]
+    subgraph TOOLKIT ["pr-review-toolkit (5 sub-agents)\n(or the 6 ShipIt specialists when engine = shipit-review)"]
         direction LR
         CR["Code\nReviewer"]
         SFH["Silent Failure\nHunter"]
@@ -227,7 +229,7 @@ graph LR
 
     subgraph Agent["shipit-peer-reviewer"]
         GL_DIFF["GitLab MCP\n(fetch diff)"]
-        TOOLKIT["pr-review-toolkit\n(5 sub-agents)"]
+        TOOLKIT["Skill('shipit:shipit-review')  [or pr-review-toolkit legacy per peer_review.engine]"]
         GL_COMMENT["GitLab MCP\n(post comments)"]
         GL_APPROVE["GitLab MCP\n(approve/reject)"]
         WORKTREE["Git Worktree\n(/tmp/ isolation)"]

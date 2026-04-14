@@ -196,6 +196,27 @@ git fetch origin
 **Why this is required:** The reviewer agent uses GitLab API for the MR diff (always current), but may also read local files for broader context. Stale remote refs could cause the agent to reference outdated code when providing context around MR changes.
 </CRITICAL_GATE>
 
+## Step 5.5: Ask Review Mode
+
+Read `.shipit/config.json`. If `peer_review.ask_mode_each_run` is `false`, skip this step and use `peer_review.default_mode` as the `<MODE>` value passed to the agent in the next step.
+
+Otherwise use `AskUserQuestion`:
+
+```
+AskUserQuestion(
+  question: "Which review mode should the reviewer use for this MR?",
+  options: [
+    { label: "Balanced (Recommended)", description: "Specialists self-challenge before reporting (~1–2 min)" },
+    { label: "Efficiency",             description: "Fastest, lowest cost (~30–60 s)" },
+    { label: "Depth",                  description: "Balanced + randomized cross-pass for highest catch rate (~2–4 min)" }
+  ]
+)
+```
+
+Map the selection to the `<MODE>` token: `Balanced → balanced`, `Efficiency → efficiency`, `Depth → depth`.
+
+Pass `<MODE>` as an explicit field in the `Review Mode:` line of the agent prompt in Step 8. The reviewer will forward it to the `shipit-review` skill.
+
 ## Step 8: Spawn Peer Reviewer Agent
 
 Before spawning, fetch the MR source branch name from GitLab MCP:
@@ -223,6 +244,7 @@ Jira Ticket Key: <TICKET_KEY>
 MR Source Branch: <SOURCE_BRANCH>
 MR Target Branch: <TARGET_BRANCH>
 GitLab Project Path: <PROJECT_PATH>
+Review Mode: <MODE>
 
 CRITICAL REMINDER: You MUST use Skill(skill: 'pr-review-toolkit:review-pr', args: '<MR_URL>') for the code review. DO NOT review the code yourself. The Skill tool call is mandatory and must happen before any review output.
 

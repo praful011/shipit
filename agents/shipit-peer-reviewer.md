@@ -26,6 +26,7 @@ Before reviewing, load context:
 - `MR Source Branch` — the branch the MR was created from (for pattern commits)
 - `MR Target Branch` — the branch the MR targets (e.g., dev, main)
 - `GitLab Project Path` — the GitLab project path (e.g., group/project)
+- `Review Mode` — one of `efficiency` | `balanced` | `depth` (from /shipit:peer-review Step 5.5)
 </project_context>
 
 <process>
@@ -45,46 +46,69 @@ Use the GitLab MCP to fetch the merge request details:
 
 If the MR cannot be fetched (404, permissions error), return an error summary to the calling command.
 
-## Step 3: Run Code Review via /pr-review-toolkit:review-pr
+## Step 3: Run Code Review (Engine-Switched)
+
+Read `peer_review.engine` from `.shipit/config.json` in the ShipIt plugin root (not the reviewed project).
+
+### Step 3a. If engine == "shipit-review" (new first-party engine)
 
 <CRITICAL_GATE>
-YOUR VERY NEXT TOOL CALL IN THIS STEP **MUST** BE:
+Your very next tool call in this step MUST be:
+
+```
+Skill(skill: "shipit:shipit-review", args: {
+  "mode": "<Review Mode from input>",
+  "mr": { "url": "<MR URL>", "iid": "<IID>", "title": "<title>", "description": "<description>",
+          "source_branch": "<MR Source Branch>", "target_branch": "<MR Target Branch>",
+          "is_draft": <bool>, "author": "<author>" },
+  "ticket": { "key": "<Jira Key>", "summary": "<summary>", "description": "<description>" },
+  "raw_diff": "<unified diff from Step 2>",
+  "project_path": "<cwd of reviewed repo>",
+  "source_branch": "<MR Source Branch>"
+})
+```
+
+This is a HARD GATE. Do NOT review the diff yourself in this branch. Do NOT spawn specialist agents directly. The `shipit-review` skill owns the whole review pipeline and returns findings in the schema below.
+</CRITICAL_GATE>
+
+### Step 3b. If engine == "pr-review-toolkit" (legacy — unchanged behavior)
+
+<CRITICAL_GATE>
+Your very next tool call MUST be:
 
 ```
 Skill(skill: "pr-review-toolkit:review-pr", args: "<MR_URL>")
 ```
 
-This is a HARD GATE. You CANNOT proceed to Step 4 without calling this Skill tool first.
-
-DO NOT analyze the code yourself.
-DO NOT write your own review.
-DO NOT spawn your own review sub-agents.
-DO NOT summarize the diff and call it a review.
-
-The ONLY acceptable action is invoking the Skill tool with `pr-review-toolkit:review-pr`.
-
-If you catch yourself thinking "I can just review it myself" or "let me analyze the diff" — STOP. That is a violation. Call the Skill tool.
+This is a HARD GATE. Call the Skill tool, wait for results, proceed.
 </CRITICAL_GATE>
 
-The `/pr-review-toolkit:review-pr` skill will spawn its own specialized sub-agents (code-reviewer, silent-failure-hunter, pr-test-analyzer, type-design-analyzer, comment-analyzer) for a thorough multi-dimensional review.
+### 3c. Either way — normalize findings
 
-Pass the MR URL as the argument. The skill handles everything — you just receive the results.
+Both engines return a finding list. Normalize into an internal structure:
 
-If the Skill tool call fails (tool not available), ONLY THEN fall back to reading the `skills/code-review/SKILL.md` reference and performing a manual review.
+```json
+{
+  "verdict_hint": "APPROVE | REQUEST_CHANGES",
+  "critical": [ {severity, category, pattern_key, file, line_start, line_end, description, prevention, fail_snippet, pass_snippet, confidence} ],
+  "important": [...],
+  "minor": [...],
+  "summary": "<2–3 sentence overall>"
+}
+```
+
+If the legacy `pr-review-toolkit` result lacks `pattern_key` or `line_start/line_end`, synthesize them from the available file + description fields so downstream steps (Step 6.5 dedup, Step 5 inline comments) work uniformly. Synthesized `pattern_key` values use the form `<category-short>-legacy-<short-slug>`.
 
 ## Step 4: Categorize Review Outcome
 
-Parse the review results and categorize:
+Three verdicts now:
 
-**APPROVE** — if the review found:
-- No CRITICAL issues
-- No IMPORTANT issues
-- Only MINOR issues or no issues at all
-
-**REQUEST CHANGES** — if the review found:
-- Any CRITICAL issues, OR
-- 2 or more IMPORTANT issues, OR
-- 1 IMPORTANT issue that affects functionality or security
+- **COMMENTS_ONLY** — when `mr.is_draft === true`. Comments will be posted (Step 5) and patterns/issues still extracted (Step 6.5/6.6), but no approve or request-changes action on GitLab.
+- **REQUEST CHANGES** — when the review found:
+  - Any CRITICAL issue, OR
+  - 2 or more IMPORTANT issues, OR
+  - 1 IMPORTANT issue of category Security or Correctness.
+- **APPROVE** — otherwise.
 
 ## Step 5: Post Review Comments on GitLab
 
@@ -113,6 +137,8 @@ Using GitLab MCP, post comments on the merge request:
 
 ## Step 6: Approve or Request Changes
 
+**If verdict is `COMMENTS_ONLY`: skip this step entirely. Do not approve. Do not request changes. Proceed to Step 6.5.**
+
 Based on the categorization from Step 4:
 
 **If APPROVE:**
@@ -134,19 +160,29 @@ Only run this step if the review found **at least one CRITICAL or IMPORTANT issu
 
 ### 6.5.1: Filter and Generalize Findings
 
-From the review results, extract each CRITICAL and IMPORTANT issue. For each one, create a generalized pattern:
+From the review results, extract each CRITICAL and IMPORTANT finding. For each, produce an entry in the **rule-pack format** (same shape as `skills/shipit-review-rules/*.md`):
 
-| Field | Description |
-|-------|-------------|
-| **Category** | One of: Security, Error Handling, Patterns, Testing, Performance |
-| **Severity** | CRITICAL or IMPORTANT |
-| **Pattern** | Generalized description of what went wrong. Remove all MR-specific details (file names, variable names, line numbers, branch names). Write it as a universal rule. |
-| **Prevention** | Concrete, actionable rule for what to do instead. Must be specific enough to follow without context. |
+```markdown
+### <pattern_key>  — <short title>
+**Category:** Security | Correctness | Performance | Error Handling | Testing | Patterns | Intent
+**Severity:** CRITICAL | IMPORTANT
+**Why it matters:** <1–2 generalized sentences; no MR-specific names>
+**Detection heuristic:** <what a reviewer should look for in a diff>
 
-**Example transformation:**
-- Raw finding: "CRITICAL: `api/users.py:42` — SQL injection in `get_user()` via string interpolation of `user_id`"
-- Generalized pattern: "SQL queries constructed via string interpolation instead of parameterized queries"
-- Prevention: "Always use parameterized queries or ORM methods for database access. Never interpolate user input into SQL strings."
+**FAIL**
+```<lang>
+<generalized code showing the anti-pattern>
+```
+
+**PASS**
+```<lang>
+<generalized code showing the fix>
+```
+
+<!-- meta: created_date=YYYY-MM-DD applied_count=0 last_matched_date=YYYY-MM-DD -->
+```
+
+Use the `pattern_key` produced by the specialist in Step 3's JSON output. Do NOT invent a new key if one exists.
 
 ### 6.5.2: Read Existing Skill File
 
@@ -158,46 +194,44 @@ cat .claude/skills/pr-review-patterns/SKILL.md
 
 If the file does not exist, create it from the template below. If it exists, read its current contents.
 
-### 6.5.3: Clean Up Existing Duplicates
+### 6.5.3: Deduplicate by `pattern_key`
 
-**Before adding new patterns, scan the entire file for duplicates that already exist.** Two different reviewers may have independently added the same pattern during separate review sessions. This cleanup runs EVERY time, regardless of whether new patterns are being added.
+Dedup is a pure string match on the `pattern_key` field. No LLM-judgment semantic-overlap check.
 
-For each category section:
-1. Compare every entry against every other entry in the **same category**
-2. If two entries have >80% semantic overlap (same root cause, same prevention approach), **remove the less specific one** (keep the one with the better prevention rule)
-3. If both are equally specific, keep the older one (appears first in the file) and remove the newer one
-4. Use your judgment for similarity — do NOT rely on exact string matching
+For each new finding:
+1. Search existing entries for one with the same `pattern_key`.
+2. If found: increment its `applied_count` in the meta line, update `last_matched_date` to today's date, do NOT add a new entry.
+3. If not found: add the new entry under the matching `## <Category>` heading with `created_date = today`, `applied_count = 0`, `last_matched_date = today`.
 
-After cleanup, the file may have fewer entries than before. This is expected and correct.
+After adding new entries, scan for a consolidation opportunity: if 3+ entries in the same category share a common `pattern_key` prefix (e.g., `sql-injection-*`), add a TODO comment at the top of the category section proposing a merged rule. Do not auto-merge — leave the suggestion for a human reviewer.
 
-### 6.5.4: Deduplicate New Patterns Against Existing Entries
+### 6.5.5: Enforce Per-Category Caps and Aging Eviction
 
-**Cross-reviewer deduplication:** Compare each new pattern against ALL remaining entries in the skill file (after cleanup). Different reviewers may have already captured similar findings.
+**Caps:**
 
-For each new pattern:
-1. Find all existing entries in the **same category** (e.g., all Security entries)
-2. Compare the new pattern's description against each existing entry
-3. If any existing entry has >80% semantic overlap (same root cause, same prevention approach), **skip the new pattern** — it's a duplicate
-4. Use your judgment for similarity — do NOT rely on exact string matching
+| Category | Max entries |
+|---|---|
+| Security | 10 |
+| Error Handling | 8 |
+| Performance | 6 |
+| Patterns | 4 |
+| Testing | 4 |
 
-Only patterns that are genuinely new (not already captured in any form) should be added.
+**Before adding a new entry**, if the target category is at its cap, evict the least valuable existing entry in that category using the following order:
 
-### 6.5.5: Enforce 30-Entry Cap
+1. **Expired by age** — entries where `applied_count == 0` and 20+ reviews have happened since `created_date`.
+2. **Expired by staleness** — entries where `last_matched_date > 90 days ago` and `applied_count < 3`.
+3. **Lowest `applied_count`** — tie-break on oldest `created_date`.
 
-Count total entries across all categories. If adding new entries would exceed 30:
-1. CRITICAL entries always get priority
-2. Remove the **oldest IMPORTANT** entries to make room (entries are ordered by when they were added — oldest are at the top of each category section)
-3. Never remove a CRITICAL entry to make room for an IMPORTANT entry
+Increment the file-header review counter (`<!-- shipit:review-counter=N -->`) by 1 every time Step 6.5 runs, regardless of whether new entries were added.
+
+CRITICAL entries still take priority: if a CRITICAL is being added and the only available evictable entries are other CRITICAL entries, skip the cap for this run rather than evict another CRITICAL.
 
 ### 6.5.6: Write Updated Skill File
 
 Write the updated skill file to `.claude/skills/pr-review-patterns/SKILL.md` in the project repo. Append new entries under the appropriate category heading.
 
-Each entry format:
-```markdown
-- **[SEVERITY]** _Pattern:_ <generalized pattern description>
-  _Prevention:_ <actionable prevention rule>
-```
+Each entry uses the rule-pack format defined in 6.5.1. Entries live under the matching `## <Category>` heading and are separated by `---` dividers. The file-header review counter (`<!-- shipit:review-counter=N -->`) is incremented once per Step 6.5 run.
 
 ### 6.5.7: Commit on MR Source Branch and Push (via Worktree)
 
@@ -327,12 +361,18 @@ name: pr-review-patterns
 description: Code patterns to avoid — learned from peer reviews. Read before writing code.
 ---
 
+<!-- shipit:review-counter=0 -->
+
 # Learned Patterns from Peer Reviews
 
-Patterns below were discovered during peer reviews.
-Follow these rules when writing code to avoid repeating known mistakes.
+Patterns below were captured during peer reviews and use the shared rule-pack format
+(see `skills/shipit-review-rules/` in the ShipIt plugin). Each entry has a stable
+`pattern_key`, category, severity, why, detection heuristic, FAIL and PASS snippets,
+and a meta line tracking applied_count + last_matched_date.
 
-**Max 30 entries.** New CRITICAL entries replace oldest IMPORTANT if at cap.
+**Per-category caps:** Security 10, Error Handling 8, Performance 6, Patterns 4, Testing 4.
+**Eviction:** Entry removed when `applied_count == 0` and 20+ reviews have happened since
+`created_date`, OR `last_matched_date` is older than 90 days and `applied_count < 3`.
 
 ## Security
 _No patterns yet._
@@ -448,7 +488,9 @@ Handle these failure modes gracefully:
 <success_criteria>
 - [ ] MR URL parsed correctly (project path + MR IID extracted)
 - [ ] GitLab MCP used to fetch MR metadata and diff
-- [ ] Code review performed via `/pr-review-toolkit:review-pr`
+- [ ] Code review performed via Step 3a (`shipit-review`) or Step 3b (`pr-review-toolkit:review-pr`) per config
+- [ ] `Review Mode` input captured and forwarded when using `shipit-review`
+- [ ] `COMMENTS_ONLY` branch handled when `mr.is_draft === true`
 - [ ] Review outcome categorized (approve vs request changes)
 - [ ] Summary comment posted on GitLab MR
 - [ ] Inline comments posted for specific issues (if supported)
