@@ -245,7 +245,12 @@ Create `.shipit/config.json` with user's choices:
   "autonomy_mode": "<from Step 4>",
   "adaptive_models": true,
   "mcp_integrations": <from Step 5>,
-  "cost_budget": null
+  "cost_budget": null,
+  "peer_review": {
+    "engine": "pr-review-toolkit",
+    "default_mode": "balanced",
+    "ask_mode_each_run": true
+  }
 }
 ```
 
