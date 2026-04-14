@@ -483,19 +483,71 @@ mcp__gitlab__create_issue(
 
 Include the created issue URLs in the review summary returned in Step 7.
 
-## Step 7: Return Summary
+## Step 7: Upsert Marker State + Return Summary
 
-Return a structured summary to the calling command:
+### 7.1 Build new marker state
+
+Skip marker upsert if `is_rereview == false` AND `peer_review.rereview_enabled == false` (no re-review machinery active). Otherwise, build the new state:
+
+```json
+{
+  "schema": "v1",
+  "last_reviewed_sha": "<MR head SHA at the start of this run>",
+  "reviewed_at": "<ISO-8601 now>",
+  "mode_used": "<efficiency|balanced|depth>",
+  "findings": [ ... ]
+}
+```
+
+The `findings[]` array is assembled as follows:
+
+1. **Prior open findings (carried forward):** every entry from `prior_findings_status` with `status == "open"`. Include updated `times_seen`, `last_escalated_at_n`, and `gitlab_comment_id`.
+2. **New findings (this run):** every finding posted in Step 5, each with:
+   - `fingerprint`: computed in Step 5.
+   - `pattern_key`, `severity`, `file`, `line_start`, `line_end`: from the finding.
+   - `status`: `"open"`.
+   - `first_seen_at`: current ISO-8601 timestamp.
+   - `times_seen`: `1`.
+   - `last_escalated_at_n`: `0`.
+   - `gitlab_comment_id`: the ID returned from the posting call.
+3. **Exclude:** entries with `status == "fixed"` or `status == "resolved-by-refactor"`. Their new-location counterparts (if any) are already in #2.
+
+**Cap:** if `findings.length > 200`, sort by `(severity ASC by priority: MINOR, IMPORTANT, CRITICAL)` then by `first_seen_at DESC`, and truncate. Add `"truncated_at": <original_length>` at the top level of the marker payload. CRITICAL entries are always preserved (never evicted by the cap).
+
+### 7.2 Upsert the marker comment
+
+Serialize the state as JSON, wrap in:
+```
+<!-- shipit-peer-review:state v1
+<JSON>
+-->
+```
+
+Via GitLab MCP:
+1. List top-level MR comments.
+2. Find the one whose body begins with `<!-- shipit-peer-review:state v1`.
+3. If found → edit it to the new body.
+4. If not found → create a new top-level MR comment with this body.
+
+If the edit fails (permissions, MCP error), fall back: post a new marker comment and log that the old one is stale. First-review-path behavior for this run's outcome remains unaffected.
+
+### 7.3 Return structured summary
+
+Return to the calling command:
 
 ```
 ## Peer Review Complete
 
 - **Ticket:** <JIRA_KEY> — <ticket summary>
 - **MR:** <MR_URL>
-- **Verdict:** APPROVED | CHANGES REQUESTED
-- **Comments Posted:** N
-- **Issues:** N critical, N important, N minor
-- **Action Taken:** MR approved | Changes requested (see MR comments)
+- **Verdict:** APPROVED | CHANGES REQUESTED | COMMENTS_ONLY
+- **Mode:** <efficiency|balanced|depth>
+- **Re-review:** yes | no
+- **New findings:** N critical, N important, N minor
+- **Prior findings:** N still open, N fixed, N refactored away (only when re-review)
+- **Escalations posted:** N (only when re-review)
+- **Action Taken:** MR approved | Changes requested | Comments only (draft)
+- **Marker:** upserted | fallback-created | not-applicable
 ```
 
 </process>
