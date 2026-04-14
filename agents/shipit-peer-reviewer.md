@@ -114,11 +114,13 @@ Three verdicts now:
 
 Using GitLab MCP, post comments on the merge request:
 
-1. **Summary comment** — Post a top-level MR comment with the overall review summary:
+1. **Summary comment** — Post a top-level MR comment.
+
+   **When `is_rereview == false`** (first review), use this template:
    ```
    ## Automated Peer Review — <Jira Ticket Key>
 
-   **Verdict:** APPROVED | CHANGES REQUESTED
+   **Verdict:** APPROVED | CHANGES REQUESTED | COMMENTS_ONLY
    **Issues Found:** N critical, N important, N minor
 
    ### Summary
@@ -130,8 +132,38 @@ Using GitLab MCP, post comments on the merge request:
    | 1 | CRITICAL | Security | <description> |
 
    ---
-   _Review performed by ShipIt peer-review agent_
+   _Review performed by ShipIt peer-review agent (<mode>)._
    ```
+
+   **When `is_rereview == true`** (re-review), use this template instead:
+   ```
+   ## Re-review — <Jira Ticket Key> — MR !<iid>
+
+   **Verdict:** APPROVED | CHANGES REQUESTED | COMMENTS_ONLY
+   **New this run:** <N> findings (<C> CRITICAL, <I> IMPORTANT, <M> MINOR)
+   **Prior findings:** <O_crit> CRITICAL / <O_imp> IMPORTANT / <O_min> MINOR still open; <F> fixed; <R> refactored away
+   **Delta reviewed:** `<from_sha>` → `<to_sha>` (<n_commits> commits)<delta_fallback_note>
+
+   ### New findings
+   | # | Severity | Category | Description | File:Line |
+   |---|----------|----------|-------------|-----------|
+
+   ### Prior findings still unaddressed
+   | # | Severity | Pattern | File:Line | times_seen |
+   |---|----------|---------|-----------|------------|
+
+   _Prior unaddressed findings: see original inline comments._
+
+   ---
+   _Review performed by ShipIt peer-review agent (<mode>)._
+   ```
+
+   `<delta_fallback_note>` is empty when `delta_fallback_reason == null`. When non-null (e.g., after a force-push), append ` — delta fallback: <reason>; reviewed full MR diff this run` to the Delta reviewed line.
+
+   Populate counts from the orchestration-skill output:
+   - `<N>`, `<C>`, `<I>`, `<M>`: counts of `critical + important + minor` from this run.
+   - `<O_crit>`, `<O_imp>`, `<O_min>`: counts of entries in `prior_findings_status` with `status == "open"`, grouped by severity.
+   - `<F>`, `<R>`: counts with `status == "fixed"` and `status == "resolved-by-refactor"`.
 
 2. **Inline comments (idempotent):** For each finding in `critical[] ∪ important[] ∪ minor[]`:
 
