@@ -256,6 +256,16 @@ Create `.shipit/config.json` with user's choices:
       "IMPORTANT": 5,
       "MINOR": null
     }
+  },
+  "pr_fix": {
+    "enabled": true,
+    "auto_push": true,
+    "auto_rereview_after_fix": true,
+    "test_runner": "auto",
+    "max_fixes_per_run": 20,
+    "severity_filter": ["CRITICAL", "IMPORTANT", "MINOR"],
+    "blast_radius_warn": "HIGH",
+    "rereview_mode": "balanced"
   }
 }
 ```

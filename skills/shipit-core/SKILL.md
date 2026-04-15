@@ -24,6 +24,7 @@ ShipIt is your unified development plugin. It combines auto-loop execution, TDD 
 | `/shipit:discuss <topic>` | Discussion mode — chat about project, no code changes |
 | `/shipit:update` | Update ShipIt to latest version from remote |
 | `/shipit:peer-review` | Automate peer review — Jira-to-GitLab or GitLab-native MR selection, code review, comments, approval |
+| `/shipit:pr-fix <MR_URL>` | Auto-fix review findings — consumes shipit-review marker state, filters machine-applicable findings, impact-analyzes each, batch-approves, commits per fix with affected-test validation, auto-pushes, auto-rereviews |
 | `/shipit:peer-qa` | Automate peer QA — browser testing, screenshots, Jira comments, ticket transition |
 | `/shipit:help` | Show usage guide |
 
@@ -76,6 +77,7 @@ The main conversation is a **thin orchestrator** that handles only the first ste
 | **shipit-error-handling-reviewer** | Error-handling specialist: swallowed errors, empty catch, silent drops | sonnet |
 | **shipit-test-reviewer** | Test specialist: coverage of new logic, test quality, flaky patterns | sonnet |
 | **shipit-intent-reviewer** | Intent specialist: diff-vs-intent alignment, scope creep | sonnet |
+| **shipit-fixer** | Applies ONE review finding — verifies fail_snippet, Edit applies pass_snippet, runs affected tests, commits atomically. Returns DONE / ROLLED_BACK / BLOCKED / PRE_SKIPPED. | sonnet |
 
 ## Auto-Loop Signals
 
